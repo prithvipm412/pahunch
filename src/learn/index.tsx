@@ -606,12 +606,12 @@ function FaultTab({ lang, s }: FaultTabProps) {
 /* ── Styles ─────────────────────────────────────────────────────── */
 const STYLES = `
   :root {
-    --clr-navy: #0B1B3F;
+    --clr-navy: #000000;
     --clr-accent: #4FC3F7;
     --clr-gold: #FFD54F;
     --clr-error: #EF5350;
     --clr-success: #66BB6A;
-    --clr-surface: rgba(255, 255, 255, 0.07);
+    --clr-surface: rgba(255, 255, 255, 0.06);
     --clr-surface-hover: rgba(255, 255, 255, 0.12);
     --radius: 16px;
     --transition: 0.25s ease;
