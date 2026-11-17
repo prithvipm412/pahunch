@@ -1,0 +1,44 @@
+.selection-bar {
+  position: fixed;
+  z-index: 12;
+  left: 50%;
+  bottom: max(12px, env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  width: min(700px, calc(100vw - 24px));
+  max-height: min(42vh, 360px);
+  overflow-y: auto;
+  padding: 14px;
+  border: 2px solid var(--orange);
+  border-radius: 20px;
+  background: var(--ink);
+  box-shadow: 0 0 0 2px rgba(226, 103, 46, .24), 0 8px 26px rgba(0, 0, 0, .55);
+  animation: selection-enter 140ms ease-out both;
+}
+.selection-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.selection-heading strong { color: var(--cream); font-size: 18px; }
+.selection-bar .remove-part {
+  min-height: 50px; padding: 8px 18px; border: 2px solid var(--orange); border-radius: 999px;
+  color: var(--cream); background: var(--red); font-size: 16px; font-weight: 800; cursor: pointer;
+}
+.selection-bar .preset-row { gap: 8px; }
+.selection-bar .preset-row button { min-height: 50px; min-width: 62px; font-size: 16px; }
+.selection-bar .selected-readout { margin-top: 10px; font-size: 14px; }
+.selected-part { filter: drop-shadow(0 0 5px var(--orange)); }
+.selected-part .wire-hit-area { stroke: transparent; }
+.bulb-halo { pointer-events: none; stroke: none; }
+.bulb-halo-off { display: none; }
+.bulb-halo-normal { opacity: .7; animation: bulb-breathe 2.5s ease-in-out infinite; }
+.bulb-halo-bright { opacity: .95; animation: bulb-breathe 2.2s ease-in-out infinite; }
+.bulb-halo-dim { opacity: .32; }
+.bulb-halo-overload { opacity: .82; }
+.bulb-core { fill: #fff; }
+.bulb-normal .bulb-core { fill: #ffd54a; }
+.bulb-bright .bulb-core { fill: #fff176; }
+.bulb-dim .bulb-core { fill: #ffb74d; }
+.bulb-overload .bulb-core { fill: #ff4545; }
+@keyframes bulb-breathe { 0%, 100% { opacity: .58; } 50% { opacity: .82; } }
+@keyframes selection-enter { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .bulb-halo-normal, .bulb-halo-bright { animation: none !important; }
+  .selection-bar { animation: none !important; }
+}
