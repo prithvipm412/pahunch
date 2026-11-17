@@ -8,6 +8,8 @@ import { classifyCircuitStatus, playCircuitStatusSound } from '../audio/feedback
 import { RUN_STARTING_TEXT } from '../audio/runSequence'
 import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
+import './build.css'
+import { removeSelectedBuildPart, selectBuildPart, undoBuildAction, type BuildEditorState } from './editorState'
 import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
 
 const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
@@ -60,13 +62,15 @@ function SymbolGraphic({ component, result, selected, onClick, onPointerDown, tr
     {result && current > 0 && <line x1={x1} y1={y1} x2={x2} y2={y2} className="flow-line" style={{ '--flow-duration': `${duration}s` } as CSSProperties} />}
     <g transform={`translate(${cx} ${cy}) rotate(${vertical ? 90 : 0})`}>
       {component.type === 'battery' && <><rect x={-radius - 8} y={-radius} width={(radius + 8) * 2} height={radius * 2} rx="5" className="part-symbol" /><line x1="-5" y1={-radius + 4} x2="-5" y2={radius - 4} stroke="#18345f" strokeWidth="3" /><line x1="5" y1={-radius * .62} x2="5" y2={radius * .62} stroke="#18345f" strokeWidth="3" /></>}
-      {component.type === 'bulb' && <><circle r={radius} className="part-symbol" fill={result?.state && result.state !== 'off' ? '#ffd86b' : '#fff'} /><path d={`M ${-radius * .48} ${-radius * .35} Q 0 ${radius * .55} ${radius * .48} ${-radius * .35} M ${-radius * .28} ${radius * .64} H ${radius * .28}`} fill="none" stroke="#18345f" strokeWidth="2.6" /></>}
+      {component.type === 'bulb' && <><circle r={radius * (result?.state === 'bright' ? 2.8 : result?.state === 'dim' ? 1.5 : 2.2)} className={`bulb-halo bulb-halo-${result?.state ?? 'off'}`} fill={`url(#bulbGlow-${result?.state ?? 'off'})`} /><circle r={radius} className="part-symbol bulb-core" /><path d={`M ${-radius * .48} ${-radius * .35} Q 0 ${radius * .55} ${radius * .48} ${-radius * .35} M ${-radius * .28} ${radius * .64} H ${radius * .28}`} fill="none" stroke="#18345f" strokeWidth="2.6" /></>}
       {component.type === 'resistor' && <><rect x={-radius - 8} y={-radius * .58} width={(radius + 8) * 2} height={radius * 1.16} rx="4" className="part-symbol" /><polyline points={`${-radius},0 ${-radius * .65},${-radius * .38} ${-radius * .3},${radius * .38} 0,${-radius * .38} ${radius * .3},${radius * .38} ${radius * .65},${-radius * .38} ${radius},0`} fill="none" stroke="#18345f" strokeWidth="2" /></>}
       {component.type === 'switch' && <><rect x={-radius - 8} y={-radius * .58} width={(radius + 8) * 2} height={radius * 1.16} rx="4" className="part-symbol" /><circle cx={-radius * .68} cy="0" r="3.5" fill="#18345f" /><circle cx={radius * .68} cy="0" r="3.5" fill="#18345f" /><line x1={-radius * .62} y1="0" x2={component.closed === false ? radius * .35 : radius * .62} y2={component.closed === false ? -radius * .52 : 0} stroke="#18345f" strokeWidth="2.5" /><text x="0" y={radius + 14} className="part-text">{component.closed === false ? translate('open') : translate('closed')}</text></>}
       {component.type === 'wire' && <><circle r="7" className="part-symbol" /><text x="0" y="1" className="part-text">·</text></>}
     </g>
     {componentValueLabel(component) && <text x={cx + (vertical ? (component.from.col === 4 ? -radius - 16 : radius + 16) : 0)} y={cy + (vertical ? 4 : -radius - 8)} className="part-value-label">{componentValueLabel(component)}</text>}
-    <rect x={Math.min(x1, x2) - 14} y={Math.min(y1, y2) - 14} width={Math.abs(x2 - x1) + 28} height={Math.abs(y2 - y1) + 28} fill="transparent" />
+    {component.type === 'wire'
+      ? <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" strokeLinecap="round" pointerEvents="stroke" className="wire-hit-area" />
+      : <rect x={Math.min(x1, x2) - 14} y={Math.min(y1, y2) - 14} width={Math.abs(x2 - x1) + 28} height={Math.abs(y2 - y1) + 28} fill="transparent" />}
   </g>
 }
 
@@ -83,7 +87,6 @@ export default function BuildScreen() {
   const [placing, setPlacing] = useState<ComponentType | null>(null)
   const [firstPoint, setFirstPoint] = useState<GridPoint | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [editOpen, setEditOpen] = useState(false)
   const [movePreview, setMovePreview] = useState<{ component: CircuitComponent; valid: boolean } | null>(null)
   const [result, setResult] = useState<SolveResult | null>(null)
   const [notice, setNotice] = useState(() => translate('hintStart'))
@@ -111,10 +114,10 @@ export default function BuildScreen() {
 
   function choosePart(type: ComponentType) {
     if (type === 'wire' && placing === 'wire') {
-      setPlacing(null); setFirstPoint(null); setEditOpen(false); setNotice(translate('hintStart'))
+      setPlacing(null); setFirstPoint(null); setNotice(translate('hintStart'))
       return
     }
-    setPlacing(type); setFirstPoint(null); setSelectedId(null); setEditOpen(false)
+    setPlacing(type); setFirstPoint(null); setSelectedId(null)
     setNotice(type === 'wire' ? translate('wireHint') : translate('hintChoose'))
   }
   function addComponent(from: GridPoint, to: GridPoint) {
@@ -136,7 +139,6 @@ export default function BuildScreen() {
     saveNetlist({ ...netlist, source: 'build', components: [...netlist.components, newComponent] })
     if (type !== 'wire') {
       setPlacing(null); setSelectedId(newComponent.id)
-      setEditOpen(type === 'battery' || type === 'resistor')
     }
     setFirstPoint(null); setNotice(type === 'wire' ? translate('wireHint') : tWith('partAdded', lang, { part: translate(type) }))
   }
@@ -183,8 +185,8 @@ export default function BuildScreen() {
   }
 
   function beginPartDrag(component: CircuitComponent, event: ReactPointerEvent<SVGGElement>) {
-    if (placing) return
     event.stopPropagation()
+    if (placing) return
     const svg = event.currentTarget.ownerSVGElement
     if (!svg) return
     const point = canvasPoint(event, svg)
@@ -226,7 +228,6 @@ export default function BuildScreen() {
       haptic('tap')
       saveNetlist({ ...netlist, source: 'build', components: netlist.components.map((component) => component.id === drag.component.id ? drag.candidate : component) }, true)
       setSelectedId(drag.component.id)
-      setEditOpen(false)
       suppressPartClickRef.current = true
       setNotice(translate('partMoving'))
     } else if (drag.moved && !drag.valid) {
@@ -305,7 +306,10 @@ export default function BuildScreen() {
       suppressPartClickRef.current = false
       return
     }
-    if (!placing) return
+    if (!placing) {
+      if (event.target === event.currentTarget || (event.target as Element).closest?.('.grid-cell')) setSelectedId(null)
+      return
+    }
     if (placing === 'wire' && suppressWireClickRef.current) {
       suppressWireClickRef.current = false
       return
@@ -318,6 +322,14 @@ export default function BuildScreen() {
     if (!selectedId) return
     haptic('select')
     saveNetlist({ ...netlist, components: netlist.components.map((component) => component.id === selectedId ? { ...component, ...changes } : component) }, true)
+  }
+  function editorState(): BuildEditorState { return { netlist, undoStack, selectedId } }
+  function removeSelected() {
+    if (!selectedId || !netlist.components.some((component) => component.id === selectedId)) return
+    const next = removeSelectedBuildPart(editorState())
+    haptic('delete')
+    setNetlist(next.netlist); setUndoStack(next.undoStack); setSelectedId(next.selectedId)
+    setResult(null); stopSonify()
   }
   function friendlyErrorTextFor(solveResult: SolveResult): string {
     if (solveResult.errors.length === 0) return translate('fallbackError')
@@ -351,22 +363,23 @@ export default function BuildScreen() {
   const friendlyErrors = result?.errors.map((error) => error === 'no_battery' || error === 'empty' ? translate('noBattery') : error === 'short_circuit' ? translate('shortCircuit') : error === 'open_circuit' ? translate('openCircuit') : translate('otherError'))
   function clearCircuit() {
     saveNetlist(initialNetlist)
-    setSelectedId(null); setEditOpen(false); setPlacing(null); setFirstPoint(null); setNotice(translate('circuitCleared'))
+    setSelectedId(null); setPlacing(null); setFirstPoint(null); setNotice(translate('circuitCleared'))
   }
 
   function undoLast() {
-    const previous = undoStack[undoStack.length - 1]
-    if (!previous) return
+    const next = undoBuildAction(editorState())
+    if (next === editorState()) return
     haptic('undo')
-    setNetlist(previous); setUndoStack((history) => history.slice(0, -1)); setSelectedId(null); setEditOpen(false); setResult(null); stopSonify(); setNotice(translate('hintStart'))
+    setNetlist(next.netlist); setUndoStack(next.undoStack); setSelectedId(next.selectedId); setResult(null); stopSonify(); setNotice(translate('hintStart'))
   }
 
   return <main className="builder">
     <header className="builder-top"><Link to="/" className="back-link" aria-label={translate('backHome')}>←</Link><div><p className="eyebrow">PAHUNCH · {translate('circuitLab')}</p><h1>{translate('buildTitle')}</h1></div></header>
     {loadedNetlist && <p className="loaded-note" role="status">{translate('loadedDrawing')}</p>}
     <div className="builder-card"><svg className={`circuit-svg${placing === 'wire' ? ' wire-active' : ''}`} viewBox="0 0 360 360" role="img" aria-label={translate('gridLabel')} onPointerDown={startWireDrag} onPointerMove={moveWireDrag} onPointerUp={finishWireDrag} onPointerCancel={finishWireDrag} onClick={handleGridClick}>
+      <defs>{['off', 'dim', 'normal', 'bright', 'overload'].map((state) => <radialGradient key={state} id={`bulbGlow-${state}`}><stop offset="0" stopColor={state === 'overload' ? '#ff3030' : state === 'dim' ? '#ff9d2e' : '#ffd54a'} stopOpacity=".85" /><stop offset="1" stopColor={state === 'overload' ? '#ff3030' : state === 'dim' ? '#ff9d2e' : '#ffd54a'} stopOpacity="0" /></radialGradient>)}</defs>
       {Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => <g key={`dot-${row}-${col}`} className="grid-cell" role="button" tabIndex={0} aria-label={`${translate('tapDot')} ${row + 1}, ${col + 1}`} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') tapDot(row, col) }}><rect x={xAt({ row, col }) - 30} y={yAt({ row, col }) - 30} width="60" height="60" fill="transparent" /><circle cx={xAt({ row, col })} cy={yAt({ row, col })} r={firstPoint?.row === row && firstPoint.col === col ? 7 : 5} className="grid-dot" /></g>))}
-      {netlist.components.map((component) => <SymbolGraphic key={component.id} component={component} result={resultMap.get(component.id)} selected={component.id === selectedId} translate={translate} interactive={!placing} onPointerDown={(event) => beginPartDrag(component, event)} onClick={() => { if (suppressPartClickRef.current) { suppressPartClickRef.current = false; return } setSelectedId(component.id); setPlacing(null); setEditOpen(true) }} />)}
+      {netlist.components.map((component) => <SymbolGraphic key={component.id} component={component} result={resultMap.get(component.id)} selected={component.id === selectedId} translate={translate} interactive onPointerDown={(event) => beginPartDrag(component, event)} onClick={() => { if (suppressPartClickRef.current) { suppressPartClickRef.current = false; return } setSelectedId(selectBuildPart(editorState(), component.id).selectedId); setPlacing(null) }} />)}
       {movePreview && <SymbolGraphic component={movePreview.component} selected={false} translate={translate} interactive={false} ghost={movePreview.valid ? 'valid' : 'invalid'} onClick={() => undefined} />}
       {wirePreview && <line x1={xAt(wirePreview.from)} y1={yAt(wirePreview.from)} x2={wirePreview.to.x} y2={wirePreview.to.y} className="wire-preview" />}
     </svg></div>
@@ -378,15 +391,14 @@ export default function BuildScreen() {
       <button className="action-button" onClick={undoLast} disabled={undoStack.length === 0}>{translate('undo')}</button>
       <button className="action-button" onClick={clearCircuit}>{translate('clear')}</button>
     </div>
-    {editOpen && selected && <div className="edit-overlay" onClick={() => setEditOpen(false)}><section className="edit-dialog" role="dialog" aria-modal="true" aria-label={translate('selectedComponent')} onClick={(event) => event.stopPropagation()}>
-      <strong>{selected.type === 'battery' ? translate('howManyVolts') : selected.type === 'resistor' || selected.type === 'bulb' ? translate('howManyOhms') : translate(selected.type)}</strong>
+    {selected && <section className="selection-bar" role="region" aria-label={translate('selectedComponent')}>
+      <div className="selection-heading"><strong>{translate(selected.type)}</strong><button className="remove-part" onClick={removeSelected}>{tWith('removePart', lang, { part: translate(selected.type).toLowerCase() })}</button></div>
       {selected.type === 'battery' && <div className="preset-row">{[1.5, 3, 4.5, 6, 9].map((value) => <button key={value} aria-pressed={(selected.value ?? 3) === value} onClick={() => updateSelected({ value })}>{formatValue(value)} V</button>)}</div>}
       {selected.type === 'resistor' && <div className="preset-row">{[5, 10, 20, 50, 100].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
       {selected.type === 'bulb' && <div className="preset-row">{[5, 10, 20].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
       {selected.type === 'switch' && <div className="preset-row"><button aria-pressed={selected.closed !== false} onClick={() => updateSelected({ closed: true })}>{translate('closed')}</button><button aria-pressed={selected.closed === false} onClick={() => updateSelected({ closed: false })}>{translate('open')}</button></div>}
-      <div className="edit-actions"><button onClick={() => { haptic('delete'); saveNetlist({ ...netlist, components: netlist.components.filter((component) => component.id !== selected.id) }); setSelectedId(null); setEditOpen(false) }}>{translate('delete')}</button><button className="edit-done" onClick={() => setEditOpen(false)}>{translate('done')}</button></div>
       {resultMap.has(selected.id) && <span className="selected-readout">{translate('voltage')}: {resultMap.get(selected.id)!.voltage.toFixed(2)} V · {translate('current')}: {resultMap.get(selected.id)!.current.toFixed(3)} A · {translate('power')}: {resultMap.get(selected.id)!.power.toFixed(3)} W</span>}
-    </section></div>}
+    </section>}
     {result && <section className="result-panel" aria-live="polite" aria-label={translate('runResults')}>
       {friendlyErrors?.length ? <div className="result-banner">{friendlyErrors.join(' ')}</div> : !result.ok ? <div className="result-banner">{translate('fallbackError')}</div> : null}
       {result.warnings.length > 0 && <p>{translate('warnings')}</p>}
