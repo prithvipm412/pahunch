@@ -142,20 +142,69 @@
   background: #0f0f0f;
   color: #f1e6cf;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 24px;
   text-align: center;
   padding: 24px;
+  overflow-y: auto;
   z-index: 10;
   border: 0;
   font: inherit;
   cursor: pointer;
 }
 
-.sparsh-unlock-overlay span {
+.sparsh-unlock-prompt {
   font-size: clamp(26px, 7vw, 40px);
   font-weight: 800;
   max-width: 20ch;
+}
+
+/* A visible reference for sighted teachers/judges — the same GESTURE_MAP that drives the
+   reducer and the spoken 'help' clip, just laid out as a readable card instead of spoken aloud. */
+.sparsh-cheatsheet {
+  width: min(92vw, 560px);
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 18px 20px;
+  border: 2px solid #f1e6cf;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.04);
+  text-align: left;
+  cursor: default;
+}
+
+.sparsh-cheatsheet h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+  text-align: center;
+  letter-spacing: 0.04em;
+}
+
+.sparsh-cheatsheet dl {
+  margin: 0;
+}
+
+.sparsh-cheatsheet-row {
+  margin: 0 0 12px;
+}
+
+.sparsh-cheatsheet-row:last-child {
+  margin-bottom: 0;
+}
+
+.sparsh-cheatsheet-row dt {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffd166;
+}
+
+.sparsh-cheatsheet-row dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #d7e3ff;
 }
 
 @media (prefers-reduced-motion: reduce) {

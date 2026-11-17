@@ -1,8 +1,8 @@
 file,en,kn
 pos_template,”Row {r},"column {c}.”,”ಸಾಲು {r}, ಕಾಲಂ {c}.”"
-welcome,Welcome to KaagazLab. Double-tap anywhere to start.,ಕಾಗಜ್‌ಲ್ಯಾಬ್‌ಗೆ ಸ್ವಾಗತ. ಶುರು ಮಾಡಲು ಎಲ್ಲಿಯಾದರೂ ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
-talkback_hint,”For best results,"pause TalkBack by holding both volume keys.”,ಚೆನ್ನಾಗಿ ಕೆಲಸ ಮಾಡಲು ಎರಡೂ ವಾಲ್ಯೂಮ್ ಬಟನ್ ಒತ್ತಿ ಹಿಡಿದು TalkBack ಅನ್ನು ಸ್ವಲ್ಪ ಹೊತ್ತು ನಿಲ್ಲಿಸಿ."
-grid_intro,You are on a five by five grid. Swipe to move. Double-tap to place a part.,ನೀವು ಐದು ಸಾಲು ಮತ್ತು ಐದು ಕಾಲಂ ಇರುವ ಚೌಕದಲ್ಲಿ ಇದ್ದೀರಿ. ಚಲಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಭಾಗವನ್ನು ಇಡಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+welcome,Sparsh mode. Build a circuit by touch and sound.,ಸ್ಪರ್ಶ ಕ್ರಮ. ಸ್ಪರ್ಶ ಮತ್ತು ಶಬ್ದದ ಮೂಲಕ ವಲಯವನ್ನು ಕಟ್ಟಿ.
+talkback_hint,"One finger: swipe to move, double tap to open the part picker, swipe to place it. Two fingers: tap to run, hold for a summary, swipe right to undo. Three finger tap any time for full help.","ಒಂದು ಬೆರಳು: ಚಲಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ, ಭಾಗ ಆಯ್ಕೆ ಪಟ್ಟಿ ತೆರೆಯಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಎರಡು ಬೆರಳುಗಳು: ಚಾಲನೆ ಮಾಡಲು ತಟ್ಟಿ, ಸಾರಾಂಶಕ್ಕೆ ಒತ್ತಿ ಹಿಡಿಯಿರಿ, ಹಿಂದಕ್ಕೆ ಮಾಡಲು ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಪೂರ್ಣ ಸಹಾಯಕ್ಕೆ ಯಾವಾಗಲಾದರೂ ಮೂರು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ."
+grid_intro,"This is a 5 by 5 grid. You are at row 1, column 1. Double tap to choose a part, then swipe to place it. Three finger tap any time for help.","ಇದು 5 ಬೈ 5 ಚೌಕ. ನೀವು ಸಾಲು 1, ಕಾಲಂ 1 ರಲ್ಲಿದ್ದೀರಿ. ಭಾಗ ಆಯ್ಕೆ ಮಾಡಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಸಹಾಯಕ್ಕೆ ಯಾವಾಗಲಾದರೂ ಮೂರು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ."
 row,Row,ಸಾಲು
 column,Column,ಕಾಲಂ
 n1,One,ಒಂದು
@@ -160,20 +160,20 @@ fault_q_f7,"Two bulbs in parallel, one is dark. Tap the broken part on its branc
 fault_q_f8,"Two batteries, but nothing glows. Tap the one facing the wrong way.","ಎರಡು ಬ್ಯಾಟರಿಗಳು, ಆದರೆ ಏನೂ ಹೊಳೆಯುತ್ತಿಲ್ಲ. ತಪ್ಪು ದಿಕ್ಕಿನಲ್ಲಿರುವುದನ್ನು ತಟ್ಟಿ."
 fault_q_f9,The bulb is dark. One wire leads to a dead end. Tap it.,ಬಲ್ಬ್ ಕತ್ತಲಾಗಿದೆ. ಒಂದು ತಂತಿ ಎಲ್ಲಿಗೂ ಹೋಗುವುದಿಲ್ಲ. ಅದನ್ನು ತಟ್ಟಿ.
 fault_wrong,Not that one — try again.,ಅದು ಅಲ್ಲ — ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.
-help,"One finger: swipe to move. Tap once to repeat where you are. Double tap for wire. Triple tap for bulb. Four taps for resistor. Hold for battery. Tap, then hold, for switch. After choosing a part, swipe to place it; tap once to cancel. Two fingers: tap to run or stop. Hold for a summary. Swipe down to remove the part here. Swipe up to toggle a switch here. Swipe right to undo. Double tap for the guided lesson. Swipe left twice to leave. Three finger tap to hear this again.","ಒಂದು ಬೆರಳು: ಚಲಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಈಗಿರುವ ಸ್ಥಳವನ್ನು ಮತ್ತೆ ಕೇಳಲು ಒಮ್ಮೆ ತಟ್ಟಿ. ತಂತಿಗೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ. ಬಲ್ಬ್‌ಗೆ ಮೂರು ಬಾರಿ ತಟ್ಟಿ. ರೆಸಿಸ್ಟರ್‌ಗೆ ನಾಲ್ಕು ಬಾರಿ ತಟ್ಟಿ. ಬ್ಯಾಟರಿಗೆ ಒತ್ತಿ ಹಿಡಿಯಿರಿ. ಸ್ವಿಚ್‌ಗೆ ಒಮ್ಮೆ ತಟ್ಟಿ, ನಂತರ ಒತ್ತಿ ಹಿಡಿಯಿರಿ. ಭಾಗ ಆರಿಸಿದ ಮೇಲೆ ಅದನ್ನು ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ; ರದ್ದು ಮಾಡಲು ಒಮ್ಮೆ ತಟ್ಟಿ. ಎರಡು ಬೆರಳುಗಳಿಂದ: ಚಾಲನೆ ಮಾಡಲು ಅಥವಾ ನಿಲ್ಲಿಸಲು ತಟ್ಟಿ. ಸಾರಾಂಶ ಕೇಳಲು ಒತ್ತಿ ಹಿಡಿಯಿರಿ. ಇಲ್ಲಿರುವ ಭಾಗ ತೆಗೆಯಲು ಕೆಳಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಸ್ವಿಚ್ ಬದಲಿಸಲು ಮೇಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಹಿಂದಿನ ಹಂತಕ್ಕೆ ಹೋಗಲು ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಮಾರ್ಗದರ್ಶಿ ಪಾಠಕ್ಕೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ. ಹೊರಹೋಗಲು ಎಡಕ್ಕೆ ಎರಡು ಬಾರಿ ಸ್ವೈಪ್ ಮಾಡಿ. ಸಹಾಯವನ್ನು ಮತ್ತೆ ಕೇಳಲು ಮೂರು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ."
+help,"Tap (1 finger): Speak where you are and what is there. Never cancels anything. Double-tap (1 finger): Open or advance the part picker: Wire, Bulb, Resistor, Switch, Battery, then loops back to Wire. Each step speaks the part and gives its vibration. On a placed switch, toggles it open or closed instead. Swipe (1 finger): Move one step, or — once a part is chosen — place it in that direction. Long-press (1 finger, about 600ms): Cancel the part picker. Tap (2 fingers): Run the circuit. Right after placing a resistor or battery, cycles its value instead and speaks it. Hold (2 fingers, about 600ms): Hear a summary of the whole circuit. Swipe down (2 fingers): Remove the part at the cursor. Swipe up (2 fingers): Toggle a switch at the cursor. Swipe right (2 fingers): Undo the last change. Swipe left, twice (2 fingers): Leave Sparsh mode. Double-tap (2 fingers): Restart the guided lesson from the beginning. Tap (3 fingers): Hear this help again, any time.","ಒಂದು ಬೆರಳು ತಟ್ಟಿ: ನೀವು ಎಲ್ಲಿದ್ದೀರಿ ಮತ್ತು ಅಲ್ಲಿ ಏನಿದೆ ಎಂದು ಹೇಳುತ್ತದೆ. ಇದು ಎಂದಿಗೂ ರದ್ದು ಮಾಡುವುದಿಲ್ಲ. ಒಂದು ಬೆರಳಿನಿಂದ ಎರಡು ಬಾರಿ ತಟ್ಟಿ: ಭಾಗ ಆಯ್ಕೆ ಪಟ್ಟಿ ತೆರೆಯುತ್ತದೆ ಅಥವಾ ಮುಂದಕ್ಕೆ ಸಾಗುತ್ತದೆ: ತಂತಿ, ಬಲ್ಬ್, ರೆಸಿಸ್ಟರ್, ಸ್ವಿಚ್, ಬ್ಯಾಟರಿ, ನಂತರ ಮತ್ತೆ ತಂತಿಗೆ ಮರಳುತ್ತದೆ. ಪ್ರತಿ ಹಂತದಲ್ಲೂ ಆ ಭಾಗದ ಹೆಸರು ಹೇಳುತ್ತದೆ ಮತ್ತು ಅದರ ಕಂಪನ ನೀಡುತ್ತದೆ. ಇಟ್ಟಿರುವ ಸ್ವಿಚ್ ಮೇಲೆ ಇದ್ದರೆ, ಅದನ್ನು ಆನ್ ಅಥವಾ ಆಫ್ ಮಾಡುತ್ತದೆ. ಒಂದು ಬೆರಳಿನಿಂದ ಸ್ವೈಪ್ ಮಾಡಿ: ಒಂದು ಹೆಜ್ಜೆ ಚಲಿಸುತ್ತದೆ, ಅಥವಾ ಭಾಗ ಆಯ್ಕೆ ಮಾಡಿದ್ದರೆ ಅದನ್ನು ಆ ದಿಕ್ಕಿನಲ್ಲಿ ಇಡುತ್ತದೆ. ಒಂದು ಬೆರಳಿನಿಂದ ಸ್ವಲ್ಪ ಹೊತ್ತು ಒತ್ತಿ ಹಿಡಿಯಿರಿ: ಭಾಗ ಆಯ್ಕೆ ಪಟ್ಟಿ ರದ್ದು ಮಾಡುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ: ವಲಯ ಚಾಲನೆ ಮಾಡುತ್ತದೆ. ರೆಸಿಸ್ಟರ್ ಅಥವಾ ಬ್ಯಾಟರಿ ಇಟ್ಟ ತಕ್ಷಣ, ಇದು ಅದರ ಮೌಲ್ಯವನ್ನು ಬದಲಿಸಿ ಹೇಳುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ಒತ್ತಿ ಹಿಡಿಯಿರಿ: ಇಡೀ ವಲಯದ ಸಾರಾಂಶ ಕೇಳಿಸುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ಕೆಳಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ: ಕರ್ಸರ್ ಇರುವಲ್ಲಿನ ಭಾಗ ತೆಗೆಯುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ಮೇಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ: ಕರ್ಸರ್ ಇರುವಲ್ಲಿನ ಸ್ವಿಚ್ ಬದಲಿಸುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ: ಕೊನೆಯ ಬದಲಾವಣೆ ಹಿಂದಕ್ಕೆ ತೆಗೆದುಕೊಳ್ಳುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ಎಡಕ್ಕೆ ಎರಡು ಬಾರಿ ಸ್ವೈಪ್ ಮಾಡಿ: ಸ್ಪರ್ಶ ಕ್ರಮದಿಂದ ಹೊರಹೋಗುತ್ತದೆ. ಎರಡು ಬೆರಳುಗಳಿಂದ ಎರಡು ಬಾರಿ ತಟ್ಟಿ: ಮಾರ್ಗದರ್ಶಿ ಪಾಠವನ್ನು ಮೊದಲಿನಿಂದ ಮತ್ತೆ ಶುರು ಮಾಡುತ್ತದೆ. ಮೂರು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ: ಯಾವಾಗ ಬೇಕಾದರೂ ಈ ಸಹಾಯವನ್ನು ಮತ್ತೆ ಕೇಳಬಹುದು."
 is_back,is back.,ಮತ್ತೆ ಬಂದಿದೆ.
 lesson_compare,"Listen. In parallel, both bulbs shine at full brightness, and the hum is louder.","ಕೇಳಿ. ಸಮಾಂತರದಲ್ಲಿ ಎರಡೂ ಬಲ್ಬ್‌ಗಳು ಪೂರ್ಣವಾಗಿ ಹೊಳೆಯುತ್ತವೆ, ಮತ್ತು ಗುಂಯ್ ಶಬ್ದ ಇನ್ನೂ ಜೋರಾಗಿರುತ್ತದೆ."
 lesson_complete,You finished the guided lesson. Great work.,ಮಾರ್ಗದರ್ಶಿ ಪಾಠವನ್ನು ಮುಗಿಸಿದ್ದೀರಿ. ತುಂಬಾ ಚೆನ್ನಾಗಿದೆ.
 lesson_good,Good.,ಚೆನ್ನಾಗಿದೆ.
-lesson_intro,"Let's build your first circuit together. I'll guide you, one tap at a time. If you make a mistake, swipe right with two fingers to undo.","ಬನ್ನಿ, ನಿಮ್ಮ ಮೊದಲ ಮಂಡಲವನ್ನು ಒಟ್ಟಿಗೆ ಕಟ್ಟೋಣ. ಒಂದೊಂದೇ ಸ್ಪರ್ಶದಲ್ಲಿ ನಿಮಗೆ ಮಾರ್ಗದರ್ಶನ ನೀಡುತ್ತೇನೆ. ತಪ್ಪಾದರೆ, ಹಿಂದಕ್ಕೆ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ."
-lesson_parallel_intro,"Now rebuild this in parallel. Two finger swipe down on a bulb to remove it, then use taps to add wires and a second bulb so two bulbs connect between the same two points.","ಈಗ ಇದನ್ನು ಸಮಾಂತರವಾಗಿ ಮತ್ತೆ ಕಟ್ಟಿ. ಒಂದು ಬಲ್ಬ್ ತೆಗೆಯಲು ಅದರ ಮೇಲೆ ಎರಡು ಬೆರಳುಗಳಿಂದ ಕೆಳಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ನಂತರ ತಂತಿಗಳನ್ನು ಮತ್ತು ಇನ್ನೊಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ, ಎರಡೂ ಬಲ್ಬ್‌ಗಳು ಒಂದೇ ಎರಡು ಬಿಂದುಗಳ ನಡುವೆ ಸಂಪರ್ಕವಾಗುವಂತೆ ಮಾಡಿ."
+lesson_intro,"Let's build your first circuit together. I'll guide you, one step at a time. If you make a mistake, swipe right with two fingers to undo.","ಬನ್ನಿ, ನಿಮ್ಮ ಮೊದಲ ಮಂಡಲವನ್ನು ಒಟ್ಟಿಗೆ ಕಟ್ಟೋಣ. ಒಂದೊಂದೇ ಹಂತದಲ್ಲಿ ನಿಮಗೆ ಮಾರ್ಗದರ್ಶನ ನೀಡುತ್ತೇನೆ. ತಪ್ಪಾದರೆ, ಹಿಂದಕ್ಕೆ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_parallel_intro,"Now rebuild this in parallel. Two finger swipe down on a bulb to remove it, then double tap to choose wire or bulb and swipe to place them, so two bulbs connect between the same two points.","ಈಗ ಇದನ್ನು ಸಮಾಂತರವಾಗಿ ಮತ್ತೆ ಕಟ್ಟಿ. ಒಂದು ಬಲ್ಬ್ ತೆಗೆಯಲು ಅದರ ಮೇಲೆ ಎರಡು ಬೆರಳುಗಳಿಂದ ಕೆಳಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ನಂತರ ತಂತಿ ಅಥವಾ ಬಲ್ಬ್ ಆಯ್ಕೆ ಮಾಡಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ ಮತ್ತು ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ, ಎರಡೂ ಬಲ್ಬ್‌ಗಳು ಒಂದೇ ಎರಡು ಬಿಂದುಗಳ ನಡುವೆ ಸಂಪರ್ಕವಾಗುವಂತೆ ಮಾಡಿ."
 lesson_parallel_ready,Your parallel circuit is ready. Two finger tap to run it.,ನಿಮ್ಮ ಸಮಾಂತರ ಮಂಡಲ ಸಿದ್ಧವಾಗಿದೆ. ಚಾಲನೆ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ.
 lesson_series_ready,Your circuit is ready. Two finger tap to run it and listen.,ನಿಮ್ಮ ಮಂಡಲ ಸಿದ್ಧವಾಗಿದೆ. ಚಾಲನೆ ಮಾಡಿ ಕೇಳಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ.
 lesson_series_result,That's the hum of two bulbs in series. Two finger tap again when you're ready to rebuild it in parallel.,ಇದು ಸರಣಿಯಲ್ಲಿ ಇರುವ ಎರಡು ಬಲ್ಬ್‌ಗಳ ಗುಂಯ್ ಶಬ್ದ. ಸಮಾಂತರದಲ್ಲಿ ಮತ್ತೆ ಕಟ್ಟಲು ಸಿದ್ಧರಾದಾಗ ಎರಡು ಬೆರಳುಗಳಿಂದ ಮತ್ತೆ ತಟ್ಟಿ.
-lesson_step_battery,"First, place a battery. Tap and hold anywhere, then swipe where it should go.","ಮೊದಲು, ಬ್ಯಾಟರಿ ಇಡಿ. ಎಲ್ಲಿಯಾದರೂ ಒತ್ತಿ ಹಿಡಿದು, ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
-lesson_step_bulb1,"Now add a bulb. Triple tap, then swipe where it should go.","ಈಗ ಒಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ. ಮೂರು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
-lesson_step_bulb2,"Now add another bulb. Triple tap, then swipe where it should go.","ಈಗ ಇನ್ನೊಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ. ಮೂರು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
-lesson_step_close_loop,"Now close the loop with a wire. Double tap, then swipe to place it.","ಈಗ ತಂತಿಯಿಂದ ಲೂಪ್ ಮುಚ್ಚಿ. ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_battery,"First, place a battery. Double tap until you hear Battery, then swipe where it should go.","ಮೊದಲು, ಬ್ಯಾಟರಿ ಇಡಿ. 'ಬ್ಯಾಟರಿ' ಎಂದು ಕೇಳುವವರೆಗೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_bulb1,"Now add a bulb. Double tap until you hear Bulb, then swipe where it should go.","ಈಗ ಒಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ. 'ಬಲ್ಬ್' ಎಂದು ಕೇಳುವವರೆಗೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_bulb2,"Now add another bulb. Double tap until you hear Bulb, then swipe where it should go.","ಈಗ ಇನ್ನೊಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ. 'ಬಲ್ಬ್' ಎಂದು ಕೇಳುವವರೆಗೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_close_loop,"Now close the loop with a wire. Double tap once for Wire, then swipe to place it.","ಈಗ ತಂತಿಯಿಂದ ಲೂಪ್ ಮುಚ್ಚಿ. 'ತಂತಿ'ಗಾಗಿ ಒಮ್ಮೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ."
 nothing_to_undo,Nothing to undo.,ಹಿಂದಕ್ಕೆ ಮಾಡಲು ಏನೂ ಇಲ್ಲ.
 predict_q_p1,"Battery, a closed switch, and one bulb. Will the bulb glow?","ಬ್ಯಾಟರಿ, ಮುಚ್ಚಿದ ಸ್ವಿಚ್, ಮತ್ತು ಒಂದು ಬಲ್ಬ್. ಬಲ್ಬ್ ಹೊಳೆಯುತ್ತದೆಯೇ?"
 predict_q_p10,"Two bulbs in series, then a wire is placed directly across Bulb A. What happens?","ಸರಣಿಯಲ್ಲಿ ಎರಡು ಬಲ್ಬ್‌ಗಳು, ನಂತರ ಬಲ್ಬ್ A ಅಡ್ಡಲಾಗಿ ಒಂದು ತಂತಿ ಹಾಕಲಾಗಿದೆ. ಏನಾಗುತ್ತದೆ?"
@@ -192,3 +192,13 @@ undone,Undone.,ಹಿಂದಿನ ಹಂತವನ್ನು ಹಿಂದಕ್ಕ
 run_starting,"Okay, running circuit.","ಸರಿ, ಸರ್ಕ್ಯೂಟ್ ಚಾಲನೆ ಮಾಡುತ್ತಿದ್ದೇನೆ."
 build_run_ok,Circuit results updated.,ವಲಯದ ಫಲಿತಾಂಶ ಬಂದಿದೆ.
 build_run_error,The circuit needs another look. Check the connections and try again.,ವಲಯವನ್ನು ಮತ್ತೆ ನೋಡಿ. ಸಂಪರ್ಕಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಪ್ರಯತ್ನಿಸಿ.
+ohms_5,5 ohms,ಐದು ಓಮ್
+ohms_10,10 ohms,ಹತ್ತು ಓಮ್
+ohms_20,20 ohms,ಇಪ್ಪತ್ತು ಓಮ್
+ohms_50,50 ohms,ಐವತ್ತು ಓಮ್
+ohms_100,100 ohms,ನೂರು ಓಮ್
+volts_1_5,1.5 volts,ಒಂದೂವರೆ ವೋಲ್ಟ್
+volts_3,3 volts,ಮೂರು ವೋಲ್ಟ್
+volts_4_5,4.5 volts,ನಾಲ್ಕೂವರೆ ವೋಲ್ಟ್
+volts_6,6 volts,ಆರು ವೋಲ್ಟ್
+volts_9,9 volts,ಒಂಬತ್ತು ವೋಲ್ಟ್

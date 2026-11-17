@@ -1,8 +1,20 @@
 import type { CircuitComponent, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { describeCircuit } from '../physics/describe'
+import { DEFAULT_BATTERY_VOLTAGE, DEFAULT_RESISTOR_RESISTANCE } from '../physics/constants'
 import { classifyCircuitStatus, type CircuitStatus } from '../audio/feedbackSounds'
 import { hapticDurationMs, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
-import { countClipFor, partClipFor, posClipFor, PART_MENU_ORDER, type ClipName } from './clips'
+import {
+  BATTERY_VALUES,
+  countClipFor,
+  ohmsClipFor,
+  partClipFor,
+  posClipFor,
+  voltsClipFor,
+  PART_MENU_ORDER,
+  RESISTOR_VALUES,
+  type ClipName,
+} from './clips'
+import { PICKER_ORDER } from './gestureMap'
 
 export const GRID_SIZE = 5
 
@@ -10,9 +22,9 @@ export type Direction = 'up' | 'down' | 'left' | 'right'
 
 export type Mode = 'build' | 'explore'
 
-// 'idle': cursor swipes move around the grid. 'partChosen': the student has selected a part
-// (via tap count or hold — see SparshEvent) and the next swipe places it from the cursor to the
-// neighbouring dot in that direction.
+// 'idle': cursor swipes move around the grid. 'partChosen': the student has opened the part
+// picker (via 1-finger double-tap — see SparshEvent, and gestureMap.ts's PICKER_ORDER) and the
+// next swipe places it from the cursor to the neighbouring dot in that direction.
 export type BuildSubMode = { kind: 'idle' } | { kind: 'partChosen'; partType: ComponentType }
 
 export interface ExploreState {
@@ -46,10 +58,6 @@ export interface SparshState {
   cursor: GridPoint
   netlist: Netlist
   buildSub: BuildSubMode
-  // Count of completed one-finger taps not yet finalized into a choice (or into "repeat"/
-  // "cancel"). Lives here, not in index.tsx, so the whole tap-counting/hold scheme is covered by
-  // reducer tests rather than by timers.
-  pendingTapCount: number
   explore: ExploreState | null
   lastResult: SolveResult | null
   nextId: number
@@ -65,10 +73,9 @@ export interface SparshState {
 export type SparshEvent =
   | { type: 'INIT' }
   | { type: 'SWIPE'; direction: Direction }
-  | { type: 'TAP' } // one quick one-finger tap registered
-  | { type: 'TAP_FINALIZE' } // 350ms of silence after the last tap: resolve pendingTapCount
-  | { type: 'TAP_RESET' } // the tap sequence was interrupted (moved, or a multi-finger gesture started)
-  | { type: 'HOLD' } // one-finger press held >= 600ms without moving
+  | { type: 'SINGLE_TAP' } // one-finger tap, confirmed not to be the first half of a double-tap
+  | { type: 'DOUBLE_TAP' } // one-finger double-tap: advance the part picker, or toggle a switch
+  | { type: 'HOLD' } // one-finger press held >= 600ms without moving: cancel the part picker
   | { type: 'TWO_FINGER_TAP' }
   | { type: 'TWO_FINGER_HOLD' }
   | { type: 'TWO_FINGER_SWIPE_DOWN' }
@@ -115,10 +122,10 @@ const EXIT_CONFIRM_WINDOW_MS = 3000
 // while the vibration motor was still running.
 const SPEECH_AFTER_HAPTIC_MS = 60
 
-// Each part's own "place" haptic signature (src/audio/haptics.ts), fired the moment it's
-// actually placed, so a blind student can feel *what* they just placed without waiting for
-// speech. (Choosing a part, before placement, gets a generic 'select' pulse instead — see
-// choosePart() below.)
+// Each part's own "place" haptic signature (src/audio/haptics.ts). Fired both the moment a part
+// is actually placed, and on every double-tap that lands on it in the picker (see
+// advancePicker() below) — a blind student feels *which* part is current without waiting for
+// speech, and placement reuses the exact same signature they just heard/felt while choosing it.
 const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
   wire: 'place_wire',
   battery: 'place_battery',
@@ -142,7 +149,6 @@ export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
     cursor: { row: 0, col: 0 },
     netlist: { gridSize, components: [], source: 'sparsh' },
     buildSub: { kind: 'idle' },
-    pendingTapCount: 0,
     explore: null,
     lastResult: null,
     nextId: 1,
@@ -309,31 +315,66 @@ function summaryClipsFor(netlist: Netlist): ClipName[] {
   return clips
 }
 
-function choosePart(state: SparshState, partType: ComponentType): SparshTransition {
+// The 1-finger double-tap gesture: opens the picker on 'wire' from idle, otherwise advances to
+// the next type in PICKER_ORDER (gestureMap.ts), wrapping from 'battery' back to 'wire'. Reuses
+// each part's PLACE_HAPTIC signature — see that const's comment above.
+function advancePicker(state: SparshState): SparshTransition {
+  const current = state.buildSub.kind === 'partChosen' ? state.buildSub.partType : null
+  const currentIndex = current === null ? -1 : PICKER_ORDER.indexOf(current)
+  const next = PICKER_ORDER[(currentIndex + 1) % PICKER_ORDER.length]
   return {
-    state: { ...state, pendingTapCount: 0, buildSub: { kind: 'partChosen', partType } },
-    effects: hapticThenSpeak('select', [partClipFor(partType), 'swipe_destination']),
+    state: { ...state, buildSub: { kind: 'partChosen', partType: next } },
+    effects: hapticThenSpeak(PLACE_HAPTIC[next], [partClipFor(next), 'swipe_destination']),
   }
 }
 
-// What a finalized one-finger tap count (1-4) means. Count 2/3/4 always (re)choose a part, even
-// if one was already chosen — a student can change their mind without cancelling first. Count 1
-// is context-dependent: "repeat" when idle, "cancel" when a part is already chosen.
-function resolveTapCount(state: SparshState, rawCount: number): SparshTransition {
-  const count = Math.min(rawCount, 4)
-  if (count === 2) return choosePart(state, 'wire')
-  if (count === 3) return choosePart(state, 'bulb')
-  if (count === 4) return choosePart(state, 'resistor')
+// Deliberately narrower than "any resistor/battery touching the cursor": only the component
+// placed MOST RECENTLY overall, and only while the cursor still sits where that placement left
+// it. "After placing" (the gesture's spec) means right after, not "any time the cursor later
+// passes over it" — which matters because a loop's closing placement routinely lands the cursor
+// back on an earlier part (e.g. the guided lesson's closing wire lands on the battery's own
+// dot). Scoping to the latest placement means two-finger tap still means "run" there, since the
+// latest placement is that wire, not the battery — undisturbed by what the cursor happens to be
+// resting on.
+function justPlacedValueComponentAt(netlist: Netlist, point: GridPoint): CircuitComponent | undefined {
+  const last = netlist.components[netlist.components.length - 1]
+  if (!last || (last.type !== 'resistor' && last.type !== 'battery')) return undefined
+  if (!pointsEqual(last.from, point) && !pointsEqual(last.to, point)) return undefined
+  return last
+}
 
-  if (state.buildSub.kind === 'partChosen') {
-    return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [{ type: 'speak', clips: ['cancelled'] }] }
-  }
-  const component = findComponentAt(state.netlist, state.cursor)
-  const clips: ClipName[] = [
-    posClipFor(state.cursor.row, state.cursor.col),
-    component ? partClipFor(component.type) : 'empty',
-  ]
-  return { state, effects: [{ type: 'speak', clips }] }
+function nextCycledValue(values: number[], current: number | undefined, fallback: number): number {
+  const index = values.indexOf(current ?? fallback)
+  return values[(index + 1) % values.length]
+}
+
+function valueClipFor(type: 'resistor' | 'battery', value: number): ClipName {
+  return type === 'resistor' ? ohmsClipFor(value) : voltsClipFor(value)
+}
+
+// The 2-finger-tap value-cycling gesture, for a resistor or battery already on the grid. Cycles
+// RESISTOR_VALUES / BATTERY_VALUES (clips.ts) — the same presets Build mode's edit dialog offers
+// — starting from whichever preset the physics default (src/physics/constants.ts) already sits
+// at, so the very first cycle moves on from that default rather than restarting the list.
+function cycleValue(state: SparshState, component: CircuitComponent): SparshTransition {
+  const isResistor = component.type === 'resistor'
+  const values = isResistor ? RESISTOR_VALUES : BATTERY_VALUES
+  const fallback = isResistor ? DEFAULT_RESISTOR_RESISTANCE : DEFAULT_BATTERY_VOLTAGE
+  const previousValue = component.value ?? fallback
+  const nextValue = nextCycledValue(values, component.value, fallback)
+  const type = component.type as 'resistor' | 'battery'
+
+  return withLessonCheck({
+    state: {
+      ...state,
+      netlist: {
+        ...state.netlist,
+        components: state.netlist.components.map((c) => (c.id === component.id ? { ...c, value: nextValue } : c)),
+      },
+      history: pushHistory(state, [partClipFor(component.type), valueClipFor(type, previousValue)]),
+    },
+    effects: [{ type: 'haptic', name: 'select' }, { type: 'speak', clips: [partClipFor(component.type), valueClipFor(type, nextValue)] }],
+  })
 }
 
 function handleCursorMove(state: SparshState, direction: Direction): SparshTransition {
@@ -384,11 +425,10 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
 }
 
 function handleBuildSwipe(state: SparshState, direction: Direction): SparshTransition {
-  const cleared: SparshState = { ...state, pendingTapCount: 0 }
-  if (cleared.buildSub.kind === 'partChosen') {
-    return handlePlacement(cleared, cleared.buildSub.partType, direction)
+  if (state.buildSub.kind === 'partChosen') {
+    return handlePlacement(state, state.buildSub.partType, direction)
   }
-  return handleCursorMove(cleared, direction)
+  return handleCursorMove(state, direction)
 }
 
 // feedbackFor() is the pure (event, solveResult) -> feedback mapping the task asks for. It's
@@ -563,7 +603,7 @@ function handleUndo(state: SparshState): SparshTransition {
   // A chosen-but-not-yet-placed part isn't a history entry — undo just cancels it.
   if (state.buildSub.kind === 'partChosen') {
     return {
-      state: { ...state, buildSub: { kind: 'idle' }, pendingTapCount: 0 },
+      state: { ...state, buildSub: { kind: 'idle' } },
       effects: [{ type: 'speak', clips: ['cancelled'] }],
     }
   }
@@ -584,37 +624,44 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       if (state.mode !== 'build') return noChange(state)
       return handleBuildSwipe(state, event.direction)
 
-    case 'TAP':
+    case 'SINGLE_TAP': {
       if (state.mode !== 'build') return noChange(state)
-      return {
-        state: { ...state, pendingTapCount: state.pendingTapCount + 1 },
-        effects: [{ type: 'haptic', name: 'tap' }],
-      }
-
-    case 'TAP_FINALIZE': {
-      if (state.mode !== 'build') return noChange(state)
-      const count = state.pendingTapCount
-      if (count === 0) return noChange(state)
-      return resolveTapCount({ ...state, pendingTapCount: 0 }, count)
+      const component = findComponentAt(state.netlist, state.cursor)
+      const clips: ClipName[] = [
+        posClipFor(state.cursor.row, state.cursor.col),
+        component ? partClipFor(component.type) : 'empty',
+      ]
+      return { state, effects: [{ type: 'speak', clips }] }
     }
 
-    case 'TAP_RESET':
-      if (state.pendingTapCount === 0) return noChange(state)
-      return noChange({ ...state, pendingTapCount: 0 })
+    case 'DOUBLE_TAP': {
+      if (state.mode !== 'build') return noChange(state)
+      // Idle, sitting on a placed switch: toggle it instead of opening the picker — there's
+      // nothing useful to place on a dot a switch already occupies.
+      if (state.buildSub.kind === 'idle') {
+        const switchHere = state.netlist.components.find(
+          (c) => c.type === 'switch' && (pointsEqual(c.from, state.cursor) || pointsEqual(c.to, state.cursor)),
+        )
+        if (switchHere) return handleToggleSwitchAtCursor(state)
+      }
+      return advancePicker(state)
+    }
 
     case 'HOLD': {
       if (state.mode !== 'build') return noChange(state)
-      const count = state.pendingTapCount
-      const cleared = { ...state, pendingTapCount: 0 }
-      if (count === 0) return choosePart(cleared, 'battery')
-      if (count === 1) return choosePart(cleared, 'switch')
-      // Unexpected (2+ taps then a hold, not part of the defined scheme): just finalize the
-      // count that was already building, rather than silently dropping the gesture.
-      return resolveTapCount(cleared, count)
+      if (state.buildSub.kind !== 'partChosen') return noChange(state) // nothing open to cancel
+      return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [{ type: 'speak', clips: ['cancelled'] }] }
     }
 
     case 'TWO_FINGER_TAP': {
-      if (state.mode === 'build') return { state, effects: [{ type: 'solve' }] }
+      if (state.mode === 'build') {
+        // Right after placing a resistor or battery, two-finger tap cycles its value instead of
+        // running — see justPlacedValueComponentAt()'s comment for why this can never shadow
+        // "run" once the student has moved on to placing something else.
+        const valueComponent = justPlacedValueComponentAt(state.netlist, state.cursor)
+        if (valueComponent) return cycleValue(state, valueComponent)
+        return { state, effects: [{ type: 'solve' }] }
+      }
       return exitExplore(state)
     }
 
@@ -651,7 +698,6 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
           ...state,
           mode: 'build',
           buildSub: { kind: 'idle' },
-          pendingTapCount: 0,
           explore: null,
           cursor: { row: 0, col: 0 },
           netlist: { ...state.netlist, components: [] },
@@ -676,9 +722,6 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
 
     case 'REST':
       return handleRest(state, event.point)
-
-    case 'TWO_FINGER_SWIPE_LEFT':
-      return { state, effects: [{ type: 'stopAll' }, { type: 'navigateHome' }] }
 
     default:
       return noChange(state)

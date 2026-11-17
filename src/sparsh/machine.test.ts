@@ -2,29 +2,30 @@ import { describe, expect, it } from 'vitest'
 import type { Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
 import { createInitialState, feedbackFor, sparshReducer, type Direction, type SparshState } from './machine'
+import { PICKER_ORDER } from './gestureMap'
+import type { ComponentType } from '../contracts/netlist'
 
 function step(state: SparshState, event: Parameters<typeof sparshReducer>[1]) {
   return sparshReducer(state, event).state
 }
 
-// Dispatches `count` TAP events followed by TAP_FINALIZE — the sequence index.tsx produces for
-// a finalized tap count.
-function tapCount(state: SparshState, count: number) {
+// Opens/advances the picker with 1-finger double-taps until `partType` is chosen — the sequence
+// index.tsx produces for a confirmed double-tap, repeated as many times as PICKER_ORDER needs.
+function choosePart(state: SparshState, partType: ComponentType): SparshState {
+  const index = PICKER_ORDER.indexOf(partType)
   let s = state
-  for (let i = 0; i < count; i++) s = step(s, { type: 'TAP' })
-  return sparshReducer(s, { type: 'TAP_FINALIZE' })
+  for (let i = 0; i <= index; i++) s = step(s, { type: 'DOUBLE_TAP' })
+  return s
 }
 
-// Chooses a part by tap count (2=wire, 3=bulb, 4=resistor) and places it in `direction`.
-function placePartHere(state: SparshState, count: number, direction: Direction): SparshState {
-  const chosen = tapCount(state, count).state
+// Chooses a part by the double-tap cycle and places it in `direction`.
+function placePartHere(state: SparshState, partType: ComponentType, direction: Direction): SparshState {
+  const chosen = choosePart(state, partType)
   return step(chosen, { type: 'SWIPE', direction })
 }
 
-// Chooses battery (hold, no prior tap) and places it in `direction`.
 function placeBatteryHere(state: SparshState, direction: Direction): SparshState {
-  const chosen = step(state, { type: 'HOLD' })
-  return step(chosen, { type: 'SWIPE', direction })
+  return placePartHere(state, 'battery', direction)
 }
 
 function runAndDispatchResult(state: SparshState) {
@@ -64,131 +65,116 @@ describe('sparshReducer: cursor movement', () => {
 
   it('announces the part name when moving onto an occupied dot', () => {
     let state = createInitialState()
-    state = tapCount(state, 1).state // repeat (no-op on an empty cursor, just to exercise it)
-    state = tapCount(state, 4).state // choose resistor
-    const placed = sparshReducer(state, { type: 'SWIPE', direction: 'right' })
-    expect(placed.state.netlist.components).toHaveLength(1)
+    state = placePartHere(state, 'resistor', 'right')
 
-    const { effects } = sparshReducer(placed.state, { type: 'SWIPE', direction: 'left' })
+    const { effects } = sparshReducer(state, { type: 'SWIPE', direction: 'left' })
     expect(effects[2]).toEqual({ type: 'speak', clips: ['pos_r1c1', 'resistor'] })
   })
 })
 
-describe('sparshReducer: one-finger tap counting', () => {
-  it('ticks on every raw tap without speaking', () => {
-    const { state, effects } = sparshReducer(createInitialState(), { type: 'TAP' })
-    expect(state.pendingTapCount).toBe(1)
-    expect(effects).toEqual([{ type: 'haptic', name: 'tap' }])
-  })
+describe('sparshReducer: the one-finger cycle picker', () => {
+  it('a single tap always speaks position and part, whether or not a part is chosen', () => {
+    const idle = sparshReducer(createInitialState(), { type: 'SINGLE_TAP' })
+    expect(idle.state.buildSub).toEqual({ kind: 'idle' })
+    expect(idle.effects).toEqual([{ type: 'speak', clips: ['pos_r1c1', 'empty'] }])
 
-  it('TAP_FINALIZE with count 1 while idle repeats position and part', () => {
-    const { state, effects } = tapCount(createInitialState(), 1)
-    expect(state.pendingTapCount).toBe(0)
+    const chosen = choosePart(createInitialState(), 'bulb')
+    const { state, effects } = sparshReducer(chosen, { type: 'SINGLE_TAP' })
+    // Never cancels the chosen part — that's HOLD's job now.
+    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'bulb' })
     expect(effects).toEqual([{ type: 'speak', clips: ['pos_r1c1', 'empty'] }])
   })
 
-  it('is a no-op if finalize fires with nothing pending', () => {
-    const { effects } = sparshReducer(createInitialState(), { type: 'TAP_FINALIZE' })
-    expect(effects).toEqual([])
-  })
-
-  it('2 taps choose wire, with a selection pulse', () => {
-    const { state, effects } = tapCount(createInitialState(), 2)
+  it('the first double-tap from idle always opens on wire', () => {
+    const { state, effects } = sparshReducer(createInitialState(), { type: 'DOUBLE_TAP' })
     expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
     expect(effects).toEqual([
-      { type: 'haptic', name: 'select' },
+      { type: 'haptic', name: 'place_wire' },
       { type: 'delay', ms: 75 },
       { type: 'speak', clips: ['wire', 'swipe_destination'] },
     ])
   })
 
-  it('3 taps choose bulb', () => {
-    const { state, effects } = tapCount(createInitialState(), 3)
-    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'bulb' })
-    expect(effects).toEqual([
-      { type: 'haptic', name: 'select' },
-      { type: 'delay', ms: 75 },
-      { type: 'speak', clips: ['bulb', 'swipe_destination'] },
+  it('cycles through every part in order and loops back to wire', () => {
+    let state = createInitialState()
+    for (const partType of PICKER_ORDER) {
+      state = step(state, { type: 'DOUBLE_TAP' })
+      expect(state.buildSub).toEqual({ kind: 'partChosen', partType })
+    }
+    // One more double-tap after battery (the last in PICKER_ORDER) loops back to wire.
+    state = step(state, { type: 'DOUBLE_TAP' })
+    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
+  })
+
+  it('resistor and switch are reachable and placeable, same as any other part', () => {
+    const resistorState = placePartHere(createInitialState(), 'resistor', 'right')
+    expect(resistorState.netlist.components).toEqual([
+      { id: 'sparsh-1', type: 'resistor', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
+    ])
+
+    const switchState = placePartHere(createInitialState(), 'switch', 'down')
+    expect(switchState.netlist.components).toEqual([
+      { id: 'sparsh-1', type: 'switch', from: { row: 0, col: 0 }, to: { row: 1, col: 0 }, closed: false },
     ])
   })
 
-  it('4 taps choose resistor', () => {
-    const { state, effects } = tapCount(createInitialState(), 4)
-    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'resistor' })
-    expect(effects).toEqual([
-      { type: 'haptic', name: 'select' },
-      { type: 'delay', ms: 75 },
-      { type: 'speak', clips: ['resistor', 'swipe_destination'] },
-    ])
-  })
-
-  it('clamps more than 4 taps down to resistor', () => {
-    const { state } = tapCount(createInitialState(), 6)
-    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'resistor' })
-  })
-
-  it('TAP_RESET silently clears a pending count', () => {
-    let state = step(createInitialState(), { type: 'TAP' })
-    expect(state.pendingTapCount).toBe(1)
-    const { state: reset, effects } = sparshReducer(state, { type: 'TAP_RESET' })
-    expect(reset.pendingTapCount).toBe(0)
-    expect(effects).toEqual([])
-  })
-
-  it('a single tap while a part is chosen cancels it instead of repeating', () => {
-    const chosen = tapCount(createInitialState(), 3).state // bulb chosen
-    const { state, effects } = tapCount(chosen, 1)
+  it('long-press cancels an open picker and speaks "Cancelled"', () => {
+    const chosen = choosePart(createInitialState(), 'resistor')
+    const { state, effects } = sparshReducer(chosen, { type: 'HOLD' })
     expect(state.buildSub).toEqual({ kind: 'idle' })
     expect(effects).toEqual([{ type: 'speak', clips: ['cancelled'] }])
   })
-})
 
-describe('sparshReducer: hold vs tap-then-hold', () => {
-  it('HOLD with no prior tap chooses battery', () => {
+  it('long-press while idle (nothing to cancel) is a silent no-op', () => {
     const { state, effects } = sparshReducer(createInitialState(), { type: 'HOLD' })
-    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'battery' })
-    expect(effects).toEqual([
-      { type: 'haptic', name: 'select' },
-      { type: 'delay', ms: 75 },
-      { type: 'speak', clips: ['battery', 'swipe_destination'] },
-    ])
+    expect(state.buildSub).toEqual({ kind: 'idle' })
+    expect(effects).toEqual([])
   })
 
-  it('a tap followed by HOLD chooses switch, not battery', () => {
-    const tapped = step(createInitialState(), { type: 'TAP' })
-    expect(tapped.pendingTapCount).toBe(1)
-    const { state, effects } = sparshReducer(tapped, { type: 'HOLD' })
-    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'switch' })
-    expect(state.pendingTapCount).toBe(0)
-    expect(effects).toEqual([
-      { type: 'haptic', name: 'select' },
-      { type: 'delay', ms: 75 },
-      { type: 'speak', clips: ['switch', 'swipe_destination'] },
+  it('double-tap on a placed switch toggles it instead of advancing the picker', () => {
+    const placed = placePartHere(createInitialState(), 'switch', 'right') // (0,0)->(0,1), cursor -> (0,1)
+    expect(placed.buildSub).toEqual({ kind: 'idle' })
+
+    const toggled = sparshReducer(placed, { type: 'DOUBLE_TAP' })
+    expect(toggled.state.buildSub).toEqual({ kind: 'idle' }) // picker untouched
+    expect(toggled.state.netlist.components[0]).toMatchObject({ closed: true })
+    expect(toggled.effects).toEqual([
+      { type: 'haptic', name: 'toggle_switch' },
+      { type: 'delay', ms: 90 },
+      { type: 'speak', clips: ['switch_closed'] },
     ])
+
+    const toggledBack = sparshReducer(toggled.state, { type: 'DOUBLE_TAP' })
+    expect(toggledBack.state.netlist.components[0]).toMatchObject({ closed: false })
   })
 
-  it('a hold after 2+ taps falls back to finalizing that count instead of dropping it', () => {
-    let state = step(createInitialState(), { type: 'TAP' })
-    state = step(state, { type: 'TAP' })
-    const { state: resolved } = sparshReducer(state, { type: 'HOLD' })
-    expect(resolved.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' }) // count 2 -> wire
-    expect(resolved.pendingTapCount).toBe(0)
+  it('double-tap still opens the picker on an empty dot, even one a switch is on a neighbor of', () => {
+    const placed = placePartHere(createInitialState(), 'switch', 'right') // switch at (0,0)-(0,1)
+    const movedAway = step(placed, { type: 'SWIPE', direction: 'right' }) // cursor -> (0,2), empty
+    const { state } = sparshReducer(movedAway, { type: 'DOUBLE_TAP' })
+    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
   })
 
-  it('switches placed via tap-then-hold default to open', () => {
-    let state = createInitialState()
-    state = step(state, { type: 'TAP' })
-    state = step(state, { type: 'HOLD' }) // choose switch
-    const { state: placed } = sparshReducer(state, { type: 'SWIPE', direction: 'right' })
-    expect(placed.netlist.components).toEqual([
-      { id: 'sparsh-1', type: 'switch', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, closed: false },
-    ])
+  it('double-tap while a part is already chosen always advances the picker, even over a switch', () => {
+    let state = placePartHere(createInitialState(), 'switch', 'right') // switch (0,0)-(0,1), cursor -> (0,1)
+    state = step(state, { type: 'SWIPE', direction: 'right' }) // idle move -> cursor (0,2), empty
+    state = step(state, { type: 'DOUBLE_TAP' }) // opens the picker on wire, cursor still (0,2)
+    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
+    state = step(state, { type: 'SWIPE', direction: 'left' }) // places wire (0,2)->(0,1); cursor -> (0,1), on the switch
+    expect(state.cursor).toEqual({ row: 0, col: 1 })
+    expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' }) // wire is sticky
+
+    // Now sitting on the switch, but a part is already chosen — this double-tap must advance
+    // the picker (to bulb), not toggle the switch.
+    const advanced = sparshReducer(state, { type: 'DOUBLE_TAP' })
+    expect(advanced.state.buildSub).toEqual({ kind: 'partChosen', partType: 'bulb' })
+    expect(advanced.state.netlist.components.find((c) => c.type === 'switch')).toMatchObject({ closed: false })
   })
 })
 
 describe('sparshReducer: placement', () => {
   it('places the chosen part, speaks "Placed <part>", deselects, and moves the cursor there', () => {
-    const chosen = tapCount(createInitialState(), 3).state // bulb
+    const chosen = choosePart(createInitialState(), 'bulb')
     const { state, effects } = sparshReducer(chosen, { type: 'SWIPE', direction: 'right' })
     expect(effects).toEqual([
       { type: 'haptic', name: 'place_bulb' },
@@ -203,7 +189,7 @@ describe('sparshReducer: placement', () => {
   })
 
   it('wire stays chosen (sticky) after placing, so the next swipe keeps laying wire', () => {
-    const chosen = tapCount(createInitialState(), 2).state // wire
+    const chosen = choosePart(createInitialState(), 'wire')
     const first = sparshReducer(chosen, { type: 'SWIPE', direction: 'right' })
     expect(first.state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
     expect(first.effects).toEqual([
@@ -221,7 +207,7 @@ describe('sparshReducer: placement', () => {
   })
 
   it('refuses to place off the grid, speaks why, and keeps the part chosen', () => {
-    const chosen = tapCount(createInitialState(), 3).state // bulb at (0,0)
+    const chosen = choosePart(createInitialState(), 'bulb')
     const { state, effects } = sparshReducer(chosen, { type: 'SWIPE', direction: 'up' })
     expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'bulb' })
     expect(state.netlist.components).toHaveLength(0)
@@ -233,7 +219,7 @@ describe('sparshReducer: placement', () => {
   })
 
   it('refuses to place on an already-occupied segment, speaks why, and keeps the part chosen', () => {
-    let state = tapCount(createInitialState(), 2).state // wire
+    let state = choosePart(createInitialState(), 'wire')
     state = sparshReducer(state, { type: 'SWIPE', direction: 'right' }).state // wire (0,0)->(0,1); stays chosen
     const { state: refused, effects } = sparshReducer(state, { type: 'SWIPE', direction: 'left' })
     // cursor is now at (0,1); swiping left targets the same segment (0,1)-(0,0) again
@@ -245,7 +231,72 @@ describe('sparshReducer: placement', () => {
       { type: 'speak', clips: ['segment_occupied'] },
     ])
   })
+})
 
+describe('sparshReducer: two-finger value cycling', () => {
+  it('cycles a placed resistor through 5/10/20/50/100 ohms and loops', () => {
+    let state = placePartHere(createInitialState(), 'resistor', 'right') // cursor -> (0,1), on the resistor
+    const expected = [20, 50, 100, 5, 10] // starts from the 10-ohm default, so the first step is 20
+    for (const value of expected) {
+      const { state: next, effects } = sparshReducer(state, { type: 'TWO_FINGER_TAP' })
+      expect(next.netlist.components[0].value).toBe(value)
+      expect(effects[0]).toEqual({ type: 'haptic', name: 'select' })
+      state = next
+    }
+  })
+
+  it('cycles a placed battery through 1.5/3/4.5/6/9 volts and loops', () => {
+    let state = placeBatteryHere(createInitialState(), 'right') // cursor -> (0,1), on the battery
+    const expected = [4.5, 6, 9, 1.5, 3] // starts from the 3-volt default
+    for (const value of expected) {
+      const { state: next } = sparshReducer(state, { type: 'TWO_FINGER_TAP' })
+      expect(next.netlist.components[0].value).toBe(value)
+      state = next
+    }
+  })
+
+  it('speaks the part and its new value', () => {
+    const placed = placePartHere(createInitialState(), 'resistor', 'right')
+    const { effects } = sparshReducer(placed, { type: 'TWO_FINGER_TAP' })
+    expect(effects).toEqual([
+      { type: 'haptic', name: 'select' },
+      { type: 'speak', clips: ['resistor', 'ohms_20'] },
+    ])
+  })
+
+  it('does not clash with run: two-finger tap away from a resistor/battery still runs', () => {
+    const placed = placePartHere(createInitialState(), 'resistor', 'right') // cursor -> (0,1)
+    const movedAway = step(placed, { type: 'SWIPE', direction: 'right' }) // cursor -> (0,2), empty
+    const { effects } = sparshReducer(movedAway, { type: 'TWO_FINGER_TAP' })
+    expect(effects).toEqual([{ type: 'solve' }])
+  })
+
+  it('does not cycle a wire, bulb, or switch at the cursor — two-finger tap there still runs', () => {
+    const placed = placePartHere(createInitialState(), 'switch', 'right') // cursor -> (0,1), on the switch
+    const { effects } = sparshReducer(placed, { type: 'TWO_FINGER_TAP' })
+    expect(effects).toEqual([{ type: 'solve' }])
+  })
+
+  it('does not clash with run even when the cursor later rests back on an earlier resistor/battery', () => {
+    // The resistor is placed first, then something else — so it's no longer the LAST placed
+    // component when the cursor later happens to land back on its dot (e.g. closing a loop).
+    let state = placePartHere(createInitialState(), 'resistor', 'right') // resistor (0,0)->(0,1), cursor -> (0,1)
+    state = placePartHere(state, 'wire', 'down') // wire (0,1)->(1,1), cursor -> (1,1)
+    state = step(state, { type: 'SWIPE', direction: 'left' }) // idle move -> cursor (1,0)
+    state = step(state, { type: 'SWIPE', direction: 'up' }) // idle move -> cursor (0,0), back on the resistor
+
+    const { effects } = sparshReducer(state, { type: 'TWO_FINGER_TAP' })
+    expect(effects).toEqual([{ type: 'solve' }])
+  })
+
+  it('an undo after cycling restores the previous value', () => {
+    const placed = placePartHere(createInitialState(), 'resistor', 'right')
+    const cycled = sparshReducer(placed, { type: 'TWO_FINGER_TAP' }).state // 10 -> 20
+    expect(cycled.netlist.components[0].value).toBe(20)
+
+    const undone = sparshReducer(cycled, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(undone.state.netlist.components[0].value).toBeUndefined() // back to the (unset) default
+  })
 })
 
 describe('sparshReducer: two-finger hold summary', () => {
@@ -255,11 +306,8 @@ describe('sparshReducer: two-finger hold summary', () => {
   })
 
   it('reports counts and in_series for a series circuit', () => {
-    let state = createInitialState()
-    state = step(state, { type: 'HOLD' }) // choose battery
-    state = step(state, { type: 'SWIPE', direction: 'right' }) // place battery (0,0)->(0,1)
-    state = tapCount(state, 3).state // bulb
-    state = step(state, { type: 'SWIPE', direction: 'right' }) // bulb (0,1)->(0,2)
+    let state = placeBatteryHere(createInitialState(), 'right') // battery (0,0)->(0,1)
+    state = placePartHere(state, 'bulb', 'right') // bulb (0,1)->(0,2)
 
     const { effects } = sparshReducer(state, { type: 'TWO_FINGER_HOLD' })
     expect(effects[0].type).toBe('speak')
@@ -268,11 +316,9 @@ describe('sparshReducer: two-finger hold summary', () => {
 
 describe('sparshReducer: two-finger swipe down (remove)', () => {
   it('removes the most recently placed part touching the cursor', () => {
-    let state = tapCount(createInitialState(), 3).state // bulb
-    state = step(state, { type: 'SWIPE', direction: 'right' }) // bulb (0,0)->(0,1), cursor -> (0,1)
+    let state = placePartHere(createInitialState(), 'bulb', 'right') // bulb (0,0)->(0,1), cursor -> (0,1)
     state = { ...state, cursor: { row: 0, col: 0 } }
-    state = tapCount(state, 4).state // resistor
-    state = step(state, { type: 'SWIPE', direction: 'down' }) // resistor (0,0)->(1,0), cursor -> (1,0)
+    state = placePartHere(state, 'resistor', 'down') // resistor (0,0)->(1,0), cursor -> (1,0)
     state = { ...state, cursor: { row: 0, col: 0 } } // both parts touch (0,0); resistor placed later
 
     const { state: removed, effects } = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_DOWN' })
@@ -293,10 +339,7 @@ describe('sparshReducer: two-finger swipe down (remove)', () => {
 
 describe('sparshReducer: two-finger swipe up (toggle switch)', () => {
   it('toggles a switch touching the cursor and speaks its new state', () => {
-    let state = createInitialState()
-    state = step(state, { type: 'TAP' })
-    state = step(state, { type: 'HOLD' }) // choose switch
-    state = step(state, { type: 'SWIPE', direction: 'right' }) // switch (0,0)->(0,1), cursor -> (0,1)
+    const state = placePartHere(createInitialState(), 'switch', 'right') // switch (0,0)->(0,1), cursor -> (0,1)
 
     const toggled = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_UP' })
     expect(toggled.effects).toEqual([
@@ -367,8 +410,7 @@ describe('sparshReducer: browser back interception', () => {
 
 describe('sparshReducer: two-finger swipe right (undo)', () => {
   function placeBulbAt00(state: SparshState) {
-    const chosen = tapCount(state, 3).state // bulb
-    return sparshReducer(chosen, { type: 'SWIPE', direction: 'right' }).state
+    return placePartHere(state, 'bulb', 'right')
   }
 
   it('says "Nothing to undo" when history is empty', () => {
@@ -403,10 +445,7 @@ describe('sparshReducer: two-finger swipe right (undo)', () => {
   })
 
   it('undoes a toggle: the switch reverts to its previous state', () => {
-    let state = createInitialState()
-    state = step(state, { type: 'TAP' })
-    state = step(state, { type: 'HOLD' }) // choose switch
-    state = step(state, { type: 'SWIPE', direction: 'right' }) // place switch (0,0)->(0,1), closed: false
+    const state = placePartHere(createInitialState(), 'switch', 'right') // switch (0,0)->(0,1), closed: false
 
     const toggled = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_UP' })
     expect(toggled.state.netlist.components[0]).toMatchObject({ closed: true })
@@ -420,7 +459,7 @@ describe('sparshReducer: two-finger swipe right (undo)', () => {
 
   it('several undos in a row walk all the way back', () => {
     let state = placeBulbAt00(createInitialState())
-    state = placePartHere(state, 4, 'down') // resistor, cursor advances
+    state = placePartHere(state, 'resistor', 'down') // resistor, cursor advances
 
     expect(state.netlist.components).toHaveLength(2)
 
@@ -437,16 +476,14 @@ describe('sparshReducer: two-finger swipe right (undo)', () => {
 
   it('caps history at 50 entries', () => {
     let state = createInitialState()
-    // Lay 60 wires in a long zig-zag so every placement is legal (alternaccount for the fact
-    // that a straight line would run off a 5-wide grid quickly — zig-zag stays in bounds).
+    // Lay 60 wires in a long zig-zag so every placement is legal (a straight line would run off
+    // a 5-wide grid quickly — zig-zag stays in bounds).
     const directions: Array<'right' | 'down' | 'left' | 'up'> = ['right', 'down', 'left', 'down']
     let di = 0
     for (let i = 0; i < 60; i++) {
-      const chosen = step(state, { type: 'TAP' })
-      const withTap = step(chosen, { type: 'TAP' }) // 2 taps -> wire
-      const finalized = sparshReducer(withTap, { type: 'TAP_FINALIZE' }).state
+      const chosen = choosePart(state, 'wire')
       const direction = directions[di % directions.length]
-      const placed = sparshReducer(finalized, { type: 'SWIPE', direction })
+      const placed = sparshReducer(chosen, { type: 'SWIPE', direction })
       if (placed.effects.some((e) => e.type === 'speak' && e.clips.includes('edge'))) {
         di++
         continue
@@ -460,7 +497,7 @@ describe('sparshReducer: two-finger swipe right (undo)', () => {
   it('while a part is chosen, undo only cancels the choice and leaves history untouched', () => {
     const placed = placeBulbAt00(createInitialState())
     const historyBefore = placed.history
-    const chosen = tapCount(placed, 2).state // wire
+    const chosen = choosePart(placed, 'wire')
 
     const { state, effects } = sparshReducer(chosen, { type: 'TWO_FINGER_SWIPE_RIGHT' })
     expect(state.buildSub).toEqual({ kind: 'idle' })
@@ -609,7 +646,7 @@ describe('sparshReducer: two-finger tap (run / explore)', () => {
 
 describe('feedbackFor: pure (event, solveResult) -> circuit-status mapping', () => {
   it('is null for every event other than SOLVE_RESULT', () => {
-    expect(feedbackFor({ type: 'TAP' })).toBeNull()
+    expect(feedbackFor({ type: 'SINGLE_TAP' })).toBeNull()
     expect(feedbackFor({ type: 'TWO_FINGER_TAP' })).toBeNull()
     expect(feedbackFor({ type: 'SWIPE', direction: 'up' })).toBeNull()
   })
@@ -640,7 +677,7 @@ describe('feedbackFor: pure (event, solveResult) -> circuit-status mapping', () 
 
 describe('sparshReducer: guided lesson', () => {
   it('starts on a two-finger double-tap, clearing any existing build', () => {
-    const built = placePartHere(createInitialState(), 2, 'right') // a wire
+    const built = placePartHere(createInitialState(), 'wire', 'right')
     expect(built.netlist.components).toHaveLength(1)
 
     const { state, effects } = sparshReducer(built, { type: 'TWO_FINGER_DOUBLE_TAP' })
@@ -653,15 +690,15 @@ describe('sparshReducer: guided lesson', () => {
   it('cascades through steps already satisfied out of order', () => {
     let state = step(createInitialState(), { type: 'TWO_FINGER_DOUBLE_TAP' })
 
-    state = placePartHere(state, 3, 'right') // bulb at (0,0)->(0,1)
+    state = placePartHere(state, 'bulb', 'right') // bulb at (0,0)->(0,1)
     expect(state.lesson).toEqual({ phase: 'series', stepIndex: 0 })
 
     state = step(state, { type: 'SWIPE', direction: 'down' }) // -> (1,0), empty
-    state = placePartHere(state, 3, 'right') // bulb at (1,0)->(1,1)
+    state = placePartHere(state, 'bulb', 'right') // bulb at (1,0)->(1,1)
     expect(state.lesson).toEqual({ phase: 'series', stepIndex: 0 })
 
     state = step(state, { type: 'SWIPE', direction: 'down' }) // -> (2,0), empty
-    const chosenBattery = step(state, { type: 'HOLD' }) // choose battery
+    const chosenBattery = choosePart(state, 'battery')
     const { state: afterBattery, effects } = sparshReducer(chosenBattery, { type: 'SWIPE', direction: 'right' })
     expect(afterBattery.lesson).toEqual({ phase: 'series', stepIndex: 3 })
     expect(effects).toEqual([
@@ -686,20 +723,20 @@ describe('sparshReducer: guided lesson', () => {
     expect(state.lesson).toEqual({ phase: 'series', stepIndex: 1 })
     expect(state.cursor).toEqual({ row: 0, col: 1 })
 
-    state = placePartHere(state, 3, 'down') // bulb1 (0,1)->(1,1); cursor -> (1,1)
+    state = placePartHere(state, 'bulb', 'down') // bulb1 (0,1)->(1,1); cursor -> (1,1)
     expect(state.lesson).toEqual({ phase: 'series', stepIndex: 2 })
 
-    state = placePartHere(state, 3, 'left') // bulb2 (1,1)->(1,0); cursor -> (1,0)
+    state = placePartHere(state, 'bulb', 'left') // bulb2 (1,1)->(1,0); cursor -> (1,0)
     expect(state.lesson).toEqual({ phase: 'series', stepIndex: 3 })
 
     // Close the loop: (1,0) is occupied by bulb2, (0,0) by battery — no "empty dot" restriction
-    // exists any more in Phase 4, so this is just an ordinary placement.
-    const closing = placePartHere(state, 2, 'up') // wire (1,0)->(0,0); cursor -> (0,0)
+    // exists any more, so this is just an ordinary placement.
+    const closing = placePartHere(state, 'wire', 'up') // wire (1,0)->(0,0); cursor -> (0,0)
     expect(closing.lesson).toEqual({ phase: 'seriesRun', stepIndex: 0 })
     state = closing
     // Wire is sticky — cancel the selection before moving the cursor around again, otherwise
     // the next "SWIPE"s below would try to place more wire instead of just moving.
-    state = tapCount(state, 1).state
+    state = step(state, { type: 'HOLD' })
 
     expect(state.netlist.components).toHaveLength(4)
     expect(state.netlist.components.map((c) => c.type).sort()).toEqual(['battery', 'bulb', 'bulb', 'wire'])
@@ -740,17 +777,17 @@ describe('sparshReducer: guided lesson', () => {
     ])
     state = removed.state
 
-    state = placePartHere(state, 2, 'left') // wire (1,1)->(1,0); cursor -> (1,0)
-    state = tapCount(state, 1).state // cancel the sticky wire selection
+    state = placePartHere(state, 'wire', 'left') // wire (1,1)->(1,0); cursor -> (1,0)
+    state = step(state, { type: 'HOLD' }) // cancel the sticky wire selection
     expect(state.lesson).toEqual({ phase: 'parallel', stepIndex: 0 }) // not parallel yet — only 1 bulb
 
     state = step(state, { type: 'SWIPE', direction: 'right' }) // (1,0)->(1,1)
     state = step(state, { type: 'SWIPE', direction: 'right' }) // (1,1)->(1,2), empty
-    state = placePartHere(state, 3, 'up') // bulb2' (1,2)->(0,2); cursor -> (0,2)
-    state = placePartHere(state, 2, 'left') // wire (0,2)->(0,1), top connector; cursor -> (0,1)
-    state = tapCount(state, 1).state // cancel the sticky wire selection
+    state = placePartHere(state, 'bulb', 'up') // bulb2' (1,2)->(0,2); cursor -> (0,2)
+    state = placePartHere(state, 'wire', 'left') // wire (0,2)->(0,1), top connector; cursor -> (0,1)
+    state = step(state, { type: 'HOLD' }) // cancel the sticky wire selection
     state = step(state, { type: 'SWIPE', direction: 'down' }) // (0,1)->(1,1)
-    state = placePartHere(state, 2, 'right') // wire (1,1)->(1,2), bottom connector
+    state = placePartHere(state, 'wire', 'right') // wire (1,1)->(1,2), bottom connector
 
     expect(state.lesson).toEqual({ phase: 'parallelRun', stepIndex: 0 })
 

@@ -1,13 +1,15 @@
 import type { ComponentType } from '../contracts/netlist'
+import { buildHelpText } from './gestureMap'
 
 // Clip names and English fallback text for speechSynthesis, until recorded audio ships under
 // public/audio/<lang>/<name>.mp3. Keep names stable — the recorded clips will reuse them.
-// Every clip here (plus the pos_r*c* family, templated) is also listed in clips.csv.
+// Every clip here (plus the pos_r*c*/ohms_*/volts_* families, templated) is also listed in
+// clips.csv.
 export const CLIPS = {
   welcome: 'Sparsh mode. Build a circuit by touch and sound.',
   talkback_hint:
-    'One finger: swipe to move, tap to choose a part, then swipe to place it. Two fingers: tap to run, hold for a summary, swipe right to undo. Three finger tap any time for full help.',
-  grid_intro: 'This is a 5 by 5 grid. You are at row 1, column 1. Three finger tap any time for help.',
+    'One finger: swipe to move, double tap to open the part picker, swipe to place it. Two fingers: tap to run, hold for a summary, swipe right to undo. Three finger tap any time for full help.',
+  grid_intro: 'This is a 5 by 5 grid. You are at row 1, column 1. Double tap to choose a part, then swipe to place it. Three finger tap any time for help.',
   edge: 'Edge of the grid.',
   empty: 'empty',
   battery: 'battery',
@@ -43,12 +45,9 @@ export const CLIPS = {
   nothing_to_undo: 'Nothing to undo.',
   exit_confirm: 'Swipe left again to leave.',
   exit_blocked_back: 'To leave, swipe left twice with two fingers.',
-  help:
-    'One finger: swipe to move. Tap once to repeat where you are. Double tap for wire. Triple tap for bulb. ' +
-    'Four taps for resistor. Hold for battery. Tap, then hold, for switch. After choosing a part, swipe to ' +
-    'place it; tap once to cancel. Two fingers: tap to run or stop. Hold for a summary. Swipe down to remove ' +
-    'the part here. Swipe up to toggle a switch here. Swipe right to undo. Double tap for the guided lesson. ' +
-    'Swipe left twice to leave. Three finger tap to hear this again.',
+  // Generated from gestureMap.ts's GESTURE_MAP, so the spoken help and the visible cheat sheet
+  // (rendered from the same map in index.tsx) can never drift apart.
+  help: buildHelpText(),
   n1: 'one',
   n2: 'two',
   n3: 'three',
@@ -80,23 +79,38 @@ export const CLIPS = {
   pos_r5c4: 'Row 5, column 4.',
   pos_r5c5: 'Row 5, column 5.',
 
+  // Resistor ohms and battery volts, spoken after a two-finger tap cycles a placed part's value
+  // (see RESISTOR_VALUES / BATTERY_VALUES below). A fixed, finite set of clips, the same way the
+  // pos_r*c* grid positions are, rather than live numeric speech.
+  ohms_5: '5 ohms',
+  ohms_10: '10 ohms',
+  ohms_20: '20 ohms',
+  ohms_50: '50 ohms',
+  ohms_100: '100 ohms',
+  volts_1_5: '1.5 volts',
+  volts_3: '3 volts',
+  volts_4_5: '4.5 volts',
+  volts_6: '6 volts',
+  volts_9: '9 volts',
+
   // Phase 3: guided lesson (1 battery, 2 bulbs — build in series, run, rebuild in parallel).
-  // Phase 4 reworded the step instructions to the new tap/hold scheme; the step-detection logic
-  // (which netlist shape counts as "done") is unchanged.
+  // Phase 5 reworded the step instructions for the double-tap cycle picker (replacing the
+  // tap-count/hold scheme); the step-detection logic (which netlist shape counts as "done") is
+  // unchanged.
   lesson_intro:
-    "Let's build your first circuit together. I'll guide you, one tap at a time. If you make a mistake, " +
+    "Let's build your first circuit together. I'll guide you, one step at a time. If you make a mistake, " +
     'swipe right with two fingers to undo.',
-  lesson_step_battery: 'First, place a battery. Tap and hold anywhere, then swipe where it should go.',
-  lesson_step_bulb1: 'Now add a bulb. Triple tap, then swipe where it should go.',
-  lesson_step_bulb2: 'Now add another bulb. Triple tap, then swipe where it should go.',
-  lesson_step_close_loop: 'Now close the loop with a wire. Double tap, then swipe to place it.',
+  lesson_step_battery: 'First, place a battery. Double tap until you hear Battery, then swipe where it should go.',
+  lesson_step_bulb1: 'Now add a bulb. Double tap until you hear Bulb, then swipe where it should go.',
+  lesson_step_bulb2: 'Now add another bulb. Double tap until you hear Bulb, then swipe where it should go.',
+  lesson_step_close_loop: 'Now close the loop with a wire. Double tap once for Wire, then swipe to place it.',
   lesson_good: 'Good.',
   lesson_series_ready: 'Your circuit is ready. Two finger tap to run it and listen.',
   lesson_series_result:
     "That's the hum of two bulbs in series. Two finger tap again when you're ready to rebuild it in parallel.",
   lesson_parallel_intro:
-    'Now rebuild this in parallel. Two finger swipe down on a bulb to remove it, then use taps to add wires ' +
-    'and a second bulb so two bulbs connect between the same two points.',
+    'Now rebuild this in parallel. Two finger swipe down on a bulb to remove it, then double tap to choose ' +
+    'wire or bulb and swipe to place them, so two bulbs connect between the same two points.',
   lesson_parallel_ready: 'Your parallel circuit is ready. Two finger tap to run it.',
   lesson_compare: 'Listen. In parallel, both bulbs shine at full brightness, and the hum is louder.',
   lesson_complete: 'You finished the guided lesson. Great work.',
@@ -111,6 +125,8 @@ export type ClipName = keyof typeof CLIPS
 // recorded audio ships" above.
 const CLIPS_KN: Partial<Record<ClipName, string>> = {
   run_starting: 'ಸರಿ, ಸರ್ಕ್ಯೂಟ್ ಚಾಲನೆ ಮಾಡುತ್ತಿದ್ದೇನೆ.',
+  ohms_5: 'ಐದು ಓಮ್', ohms_10: 'ಹತ್ತು ಓಮ್', ohms_20: 'ಇಪ್ಪತ್ತು ಓಮ್', ohms_50: 'ಐವತ್ತು ಓಮ್', ohms_100: 'ನೂರು ಓಮ್',
+  volts_1_5: 'ಒಂದೂವರೆ ವೋಲ್ಟ್', volts_3: 'ಮೂರು ವೋಲ್ಟ್', volts_4_5: 'ನಾಲ್ಕೂವರೆ ವೋಲ್ಟ್', volts_6: 'ಆರು ವೋಲ್ಟ್', volts_9: 'ಒಂಬತ್ತು ವೋಲ್ಟ್',
 }
 
 export function fallbackFor(name: ClipName, lang: 'en' | 'kn' = 'en'): string {
@@ -131,6 +147,23 @@ export function countClipFor(count: number): ClipName | null {
 
 export function partClipFor(type: ComponentType): ClipName {
   return type
+}
+
+// The two-finger-tap value-cycling gesture's fixed value lists — the same preset values Build
+// mode offers (src/build/index.tsx's edit dialog), so a circuit built in Sparsh and one built on
+// screen can reach the same values.
+export const RESISTOR_VALUES: number[] = [5, 10, 20, 50, 100]
+export const BATTERY_VALUES: number[] = [1.5, 3, 4.5, 6, 9]
+
+const OHMS_CLIPS: Record<number, ClipName> = { 5: 'ohms_5', 10: 'ohms_10', 20: 'ohms_20', 50: 'ohms_50', 100: 'ohms_100' }
+const VOLTS_CLIPS: Record<number, ClipName> = { 1.5: 'volts_1_5', 3: 'volts_3', 4.5: 'volts_4_5', 6: 'volts_6', 9: 'volts_9' }
+
+export function ohmsClipFor(value: number): ClipName {
+  return OHMS_CLIPS[value]
+}
+
+export function voltsClipFor(value: number): ClipName {
+  return VOLTS_CLIPS[value]
 }
 
 // Iteration order for the parts summary (TWO_FINGER_HOLD). No longer a menu-cycling order —

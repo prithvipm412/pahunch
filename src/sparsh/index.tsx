@@ -8,12 +8,15 @@ import { playCircuitStatusSound } from '../audio/feedbackSounds'
 import { useLanguage } from '../app/lang'
 import { fallbackFor } from './clips'
 import { classifySwipe, isEdgeStart, isPairedTap, pointFromClient, resolveFingerClass } from './gestures'
+import { GESTURE_MAP } from './gestureMap'
 import { createInitialState, sparshReducer, type SparshEffect, type SparshEvent, type SparshState } from './machine'
 import './sparsh.css'
 
 // A single movement threshold for every swipe, 1-, 2-, or 3-finger alike.
 const MOVEMENT_THRESHOLD = 40
-const TAP_COUNT_WINDOW_MS = 350
+// Shared by the 1-finger and 2-finger double-tap detectors: a second tap this close in time and
+// space to the first pairs with it into a DOUBLE_TAP/TWO_FINGER_DOUBLE_TAP; otherwise the first
+// tap resolves on its own as a SINGLE_TAP/TWO_FINGER_TAP once this window closes.
 const DOUBLE_TAP_WINDOW_MS = 350
 const DOUBLE_TAP_MAX_DIST = 44
 const HOLD_MS = 600
@@ -34,8 +37,11 @@ interface GestureTracker {
   holdFired: boolean
   edgeIgnored: boolean // this gesture started inside the system-back-gesture zone
   holdTimer: number | null
-  tapFinalizeTimer: number | null
   restTimer: number | null
+  lastOneFingerTapTime: number
+  lastOneFingerTapX: number
+  lastOneFingerTapY: number
+  pendingOneFingerTapTimer: number | null
   lastTwoFingerTapTime: number
   lastTwoFingerTapX: number
   lastTwoFingerTapY: number
@@ -55,8 +61,11 @@ function createGestureTracker(): GestureTracker {
     holdFired: false,
     edgeIgnored: false,
     holdTimer: null,
-    tapFinalizeTimer: null,
     restTimer: null,
+    lastOneFingerTapTime: 0,
+    lastOneFingerTapX: 0,
+    lastOneFingerTapY: 0,
+    pendingOneFingerTapTimer: null,
     lastTwoFingerTapTime: 0,
     lastTwoFingerTapX: 0,
     lastTwoFingerTapY: 0,
@@ -156,11 +165,11 @@ export default function SparshScreen() {
     }
   }
 
-  const clearTapFinalizeTimer = () => {
+  const clearPendingOneFingerTapTimer = () => {
     const g = gestureRef.current
-    if (g.tapFinalizeTimer !== null) {
-      window.clearTimeout(g.tapFinalizeTimer)
-      g.tapFinalizeTimer = null
+    if (g.pendingOneFingerTapTimer !== null) {
+      window.clearTimeout(g.pendingOneFingerTapTimer)
+      g.pendingOneFingerTapTimer = null
     }
   }
 
@@ -182,7 +191,7 @@ export default function SparshScreen() {
 
   const clearGestureTimers = () => {
     clearHoldTimer()
-    clearTapFinalizeTimer()
+    clearPendingOneFingerTapTimer()
     clearRestTimer()
     clearPendingTwoFingerTapTimer()
   }
@@ -214,9 +223,10 @@ export default function SparshScreen() {
     const g = gestureRef.current
     clearHoldTimer()
     if (g.committedClass === 1 && cls >= 2) {
-      // Upgrading away from a 1-finger gesture abandons any one-finger tap count in progress.
-      clearTapFinalizeTimer()
-      dispatch({ type: 'TAP_RESET' })
+      // Upgrading away from a 1-finger gesture abandons any single/double-tap decision pending
+      // from an earlier, already-released one-finger tap — see onTouchEnd's committedClass===1
+      // branch. No reducer event needed: that decision is purely a local index.tsx timer.
+      clearPendingOneFingerTapTimer()
     }
     g.committedClass = cls
     if (cls === 1) {
@@ -315,8 +325,10 @@ export default function SparshScreen() {
     if (!g.moved && Math.hypot(dx, dy) > MOVEMENT_THRESHOLD) {
       g.moved = true
       clearHoldTimer()
-      clearTapFinalizeTimer()
-      dispatch({ type: 'TAP_RESET' })
+      // This gesture is becoming a swipe, not a tap — if it started within the pairing window
+      // of an earlier completed tap, that pending decision should resolve as a single tap on
+      // its own rather than wait to (wrongly) pair with what just became a swipe.
+      clearPendingOneFingerTapTimer()
     }
 
     if (stateRef.current.mode === 'explore') {
@@ -398,13 +410,35 @@ export default function SparshScreen() {
       return
     }
     if (g.holdFired) return // HOLD already dispatched; this lift is not also a tap
-    if (g.moved) return // movement already dispatched TAP_RESET (and maybe a SWIPE)
+    if (g.moved) return // movement already cleared any pending tap (and maybe dispatched a SWIPE)
 
-    dispatch({ type: 'TAP' })
-    g.tapFinalizeTimer = window.setTimeout(() => {
-      g.tapFinalizeTimer = null
-      dispatch({ type: 'TAP_FINALIZE' })
-    }, TAP_COUNT_WINDOW_MS)
+    const now = Date.now()
+    if (
+      isPairedTap(
+        now,
+        g.lastOneFingerTapTime,
+        g.lastOneFingerTapX,
+        g.lastOneFingerTapY,
+        g.startX,
+        g.startY,
+        DOUBLE_TAP_WINDOW_MS,
+        DOUBLE_TAP_MAX_DIST,
+      )
+    ) {
+      clearPendingOneFingerTapTimer()
+      g.lastOneFingerTapTime = 0
+      dispatch({ type: 'DOUBLE_TAP' })
+    } else {
+      // Defer the single tap until the window closes, in case a second tap pairs with it —
+      // otherwise the double-tap would fire the single-tap action (speak position) too.
+      g.lastOneFingerTapTime = now
+      g.lastOneFingerTapX = g.startX
+      g.lastOneFingerTapY = g.startY
+      g.pendingOneFingerTapTimer = window.setTimeout(() => {
+        g.pendingOneFingerTapTimer = null
+        dispatch({ type: 'SINGLE_TAP' })
+      }, DOUBLE_TAP_WINDOW_MS)
+    }
   }
 
   const onTouchCancel = () => {
@@ -412,16 +446,32 @@ export default function SparshScreen() {
     g.active = false
     clearHoldTimer()
     clearRestTimer()
-    clearTapFinalizeTimer()
+    clearPendingOneFingerTapTimer()
     clearPendingTwoFingerTapTimer()
-    dispatch({ type: 'TAP_RESET' })
   }
 
   if (!unlocked) {
     return (
-      <button type="button" className="sparsh-unlock-overlay" onClick={handleUnlock}>
-        <span>Tap anywhere to start</span>
-      </button>
+      <div
+        role="button"
+        tabIndex={0}
+        className="sparsh-unlock-overlay"
+        onClick={handleUnlock}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleUnlock() }}
+      >
+        <section className="sparsh-cheatsheet" aria-label="Sparsh gesture cheat sheet">
+          <h2>Sparsh gestures</h2>
+          <dl>
+            {GESTURE_MAP.map((entry) => (
+              <div className="sparsh-cheatsheet-row" key={entry.id}>
+                <dt>{entry.gesture}</dt>
+                <dd>{entry.action}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+        <span className="sparsh-unlock-prompt">Tap anywhere to start</span>
+      </div>
     )
   }
 
