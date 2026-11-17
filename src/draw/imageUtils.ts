@@ -20,6 +20,10 @@ const MAX_SIDE = 1024
 const JPEG_QUALITY = 0.7
 const BLUR_THRESHOLD = 60 // variance of Laplacian; below this → too blurry
 
+export interface ProcessImageOptions {
+  skipBlur?: boolean
+}
+
 /** Convert a File/Blob to a HTMLImageElement. */
 function loadImage(blob: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -69,12 +73,16 @@ function laplacianVariance(ctx: CanvasRenderingContext2D, w: number, h: number):
 }
 
 /**
- * Process an image file:
- *  - Resize, grayscale, contrast-boost.
- *  - Throws BlurryImageError if too blurry.
- *  - Returns a base64 JPEG string (no "data:…" prefix) and a preview data-URL.
+ * Process an image file/blob:
+ *  - Resize so longest side <= 1024px.
+ *  - Grayscale & contrast-boost.
+ *  - Throws BlurryImageError if too blurry (unless skipBlur: true).
+ *  - Returns a pure base64 JPEG string (NO "data:…" prefix) and a preview data-URL.
  */
-export async function processImage(file: File): Promise<{ base64: string; previewUrl: string }> {
+export async function processImage(
+  file: Blob | File,
+  options?: ProcessImageOptions,
+): Promise<{ base64: string; previewUrl: string }> {
   const img = await loadImage(file)
 
   // Compute target size
@@ -115,15 +123,18 @@ export async function processImage(file: File): Promise<{ base64: string; previe
   }
   ctx.putImageData(imageData, 0, 0)
 
-  // Blur check
-  const variance = laplacianVariance(ctx, w, h)
-  if (variance < BLUR_THRESHOLD) {
-    throw new BlurryImageError()
+  // Blur check (unless bypassed for curated sample drawings)
+  if (!options?.skipBlur) {
+    const variance = laplacianVariance(ctx, w, h)
+    if (variance < BLUR_THRESHOLD) {
+      throw new BlurryImageError()
+    }
   }
 
-  // Export JPEG
+  // Export JPEG ~0.7 quality
   const dataUrl = canvas.toDataURL('image/jpeg', JPEG_QUALITY)
-  const base64 = dataUrl.split(',')[1]
+  // Strip data: prefix to return pure base64
+  const base64 = dataUrl.replace(/^data:[^;]+;base64,/, '').trim()
 
   return { base64, previewUrl: dataUrl }
 }

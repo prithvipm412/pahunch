@@ -4,6 +4,15 @@ import { scanCircuit, ERROR_MESSAGES } from './scanApi'
 import drawI18n from '../../content/i18n/draw.json'
 import learnI18n from '../../content/i18n/learn.json'
 import type { ComponentType } from '../contracts/netlist'
+import {
+  stripDataUrlPrefix,
+  normalizeAndValidateMimeType,
+  isPayloadTooLarge,
+  validateNetlist,
+  extractJsonFromText,
+  DEMO_NETLIST,
+  default as scanHandler,
+} from '../../api/scan.ts'
 
 // In-memory mock for localStorage in Node/Vitest environment
 const store: Record<string, string> = {}
@@ -127,6 +136,192 @@ describe('Draw mode friendly error mapping', () => {
   })
 })
 
+describe('api/scan prefix stripping', () => {
+  it('strips jpeg data URL prefix', () => {
+    expect(stripDataUrlPrefix('data:image/jpeg;base64,/9j/4AAQSkZJRg==')).toBe('/9j/4AAQSkZJRg==')
+  })
+
+  it('strips png and webp data URL prefixes', () => {
+    expect(stripDataUrlPrefix('data:image/png;base64,iVBORw0KGgo=')).toBe('iVBORw0KGgo=')
+    expect(stripDataUrlPrefix('data:image/webp;base64,UklGRm==')).toBe('UklGRm==')
+  })
+
+  it('strips arbitrary MIME data URL prefixes', () => {
+    expect(stripDataUrlPrefix('data:application/octet-stream;base64,SGVsbG8=')).toBe('SGVsbG8=')
+  })
+
+  it('returns clean base64 string unchanged', () => {
+    expect(stripDataUrlPrefix('/9j/4AAQSkZJRg==')).toBe('/9j/4AAQSkZJRg==')
+  })
+
+  it('trims leading and trailing whitespace', () => {
+    expect(stripDataUrlPrefix('  data:image/jpeg;base64,/9j/4AAQSkZJRg== \n')).toBe('/9j/4AAQSkZJRg==')
+  })
+})
+
+describe('api/scan mimeType validation', () => {
+  it('defaults to image/jpeg when missing or empty', () => {
+    expect(normalizeAndValidateMimeType()).toEqual({ ok: true, mimeType: 'image/jpeg' })
+    expect(normalizeAndValidateMimeType('')).toEqual({ ok: true, mimeType: 'image/jpeg' })
+    expect(normalizeAndValidateMimeType(undefined)).toEqual({ ok: true, mimeType: 'image/jpeg' })
+  })
+
+  it('accepts valid mime types: image/jpeg, image/png, image/webp', () => {
+    expect(normalizeAndValidateMimeType('image/jpeg')).toEqual({ ok: true, mimeType: 'image/jpeg' })
+    expect(normalizeAndValidateMimeType('image/png')).toEqual({ ok: true, mimeType: 'image/png' })
+    expect(normalizeAndValidateMimeType('image/webp')).toEqual({ ok: true, mimeType: 'image/webp' })
+  })
+
+  it('normalizes image/jpg to image/jpeg and handles uppercase', () => {
+    expect(normalizeAndValidateMimeType('image/jpg')).toEqual({ ok: true, mimeType: 'image/jpeg' })
+    expect(normalizeAndValidateMimeType('IMAGE/PNG')).toEqual({ ok: true, mimeType: 'image/png' })
+    expect(normalizeAndValidateMimeType('  image/webp  ')).toEqual({ ok: true, mimeType: 'image/webp' })
+  })
+
+  it('rejects unsupported mime types', () => {
+    const res = normalizeAndValidateMimeType('image/gif')
+    expect(res.ok).toBe(false)
+    if (!res.ok) {
+      expect(res.error).toContain('Unsupported mimeType')
+    }
+
+    expect(normalizeAndValidateMimeType('application/pdf').ok).toBe(false)
+    expect(normalizeAndValidateMimeType('text/plain').ok).toBe(false)
+  })
+})
+
+describe('api/scan payload size checking', () => {
+  it('accepts typical compressed image payload', () => {
+    const smallPayload = 'A'.repeat(50000) // ~50KB
+    expect(isPayloadTooLarge(smallPayload)).toBe(false)
+  })
+
+  it('rejects payload exceeding 4MB', () => {
+    const fourMbString = 'A'.repeat(4 * 1024 * 1024 + 10)
+    expect(isPayloadTooLarge(fourMbString)).toBe(true)
+  })
+})
+
+describe('api/scan Netlist validation', () => {
+  it('accepts a valid Netlist with adjacent components on a 5x5 grid', () => {
+    const valid = {
+      gridSize: 5,
+      source: 'draw',
+      confidence: 0.95,
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 9 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
+        { id: 'sw1', type: 'switch', from: { row: 0, col: 2 }, to: { row: 1, col: 2 }, closed: true },
+        { id: 'w1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 0, col: 0 } }, // wait: (1,2) to (0,0) not adjacent!
+      ],
+    }
+    // Fix last component so it is adjacent:
+    valid.components[3] = { id: 'w1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 1, col: 1 } }
+    const result = validateNetlist(valid)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.netlist.gridSize).toBe(5)
+      expect(result.netlist.source).toBe('draw')
+      expect(result.netlist.components.length).toBe(4)
+      expect(result.netlist.confidence).toBe(0.95)
+    }
+  })
+
+  it('rejects invalid top-level shape or missing components array', () => {
+    expect(validateNetlist(null).ok).toBe(false)
+    expect(validateNetlist('not a netlist').ok).toBe(false)
+    expect(validateNetlist([]).ok).toBe(false)
+    expect(validateNetlist({ gridSize: 5 }).ok).toBe(false)
+  })
+
+  it('rejects unknown component types', () => {
+    const input = {
+      components: [
+        { id: 'x1', type: 'inductor', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
+      ],
+    }
+    const result = validateNetlist(input)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toContain('unknown type: inductor')
+    }
+  })
+
+  it('rejects components with invalid or out-of-bounds coordinates', () => {
+    // row out of 0..4
+    expect(
+      validateNetlist({
+        components: [{ id: 'b1', type: 'battery', from: { row: 5, col: 0 }, to: { row: 4, col: 0 } }],
+      }).ok,
+    ).toBe(false)
+
+    // negative row
+    expect(
+      validateNetlist({
+        components: [{ id: 'b1', type: 'battery', from: { row: -1, col: 0 }, to: { row: 0, col: 0 } }],
+      }).ok,
+    ).toBe(false)
+
+    // non-integer float row
+    expect(
+      validateNetlist({
+        components: [{ id: 'b1', type: 'battery', from: { row: 1.5, col: 0 }, to: { row: 2.5, col: 0 } }],
+      }).ok,
+    ).toBe(false)
+  })
+
+  it('rejects components whose from and to points are not adjacent', () => {
+    // Jump of 2 horizontal dots
+    const jumpResult = validateNetlist({
+      components: [{ id: 'w1', type: 'wire', from: { row: 0, col: 0 }, to: { row: 0, col: 2 } }],
+    })
+    expect(jumpResult.ok).toBe(false)
+    if (!jumpResult.ok) {
+      expect(jumpResult.error).toContain('not adjacent')
+    }
+
+    // Diagonal connection
+    const diagResult = validateNetlist({
+      components: [{ id: 'w1', type: 'wire', from: { row: 0, col: 0 }, to: { row: 1, col: 1 } }],
+    })
+    expect(diagResult.ok).toBe(false)
+    if (!diagResult.ok) {
+      expect(diagResult.error).toContain('not adjacent')
+    }
+
+    // Same point connection
+    const sameResult = validateNetlist({
+      components: [{ id: 'w1', type: 'wire', from: { row: 2, col: 2 }, to: { row: 2, col: 2 } }],
+    })
+    expect(sameResult.ok).toBe(false)
+    if (!sameResult.ok) {
+      expect(sameResult.error).toContain('not adjacent')
+    }
+  })
+})
+
+describe('api/scan safe JSON extraction from text', () => {
+  it('parses direct JSON string', () => {
+    const raw = JSON.stringify({ gridSize: 5, components: [] })
+    expect(extractJsonFromText(raw)).toEqual({ gridSize: 5, components: [] })
+  })
+
+  it('extracts JSON enclosed in markdown code fences', () => {
+    const wrapped = '```json\n{\n  "gridSize": 5,\n  "components": []\n}\n```'
+    expect(extractJsonFromText(wrapped)).toEqual({ gridSize: 5, components: [] })
+  })
+
+  it('extracts JSON with surrounding conversational prose', () => {
+    const text = 'Here is your circuit diagram as requested:\n```json\n{"gridSize": 5, "components": []}\n```\nHope this helps!'
+    expect(extractJsonFromText(text)).toEqual({ gridSize: 5, components: [] })
+  })
+
+  it('throws on empty or non-JSON text', () => {
+    expect(() => extractJsonFromText('')).toThrow()
+    expect(() => extractJsonFromText('I could not read the image.')).toThrow()
+  })
+})
+
 describe('i18n translations consistency', () => {
   it('draw.json has identical keys for en and kn', () => {
     const enKeys = Object.keys(drawI18n.en).sort()
@@ -147,5 +342,97 @@ describe('i18n translations consistency', () => {
     const enKeys = Object.keys(learnI18n.en).sort()
     const knKeys = Object.keys(learnI18n.kn).sort()
     expect(enKeys).toEqual(knKeys)
+  })
+})
+
+describe('api/scan handler HTTP flow', () => {
+  function createMockResponse() {
+    const res: {
+      statusCode: number
+      headers: Record<string, string>
+      body: unknown
+      status: (code: number) => typeof res
+      setHeader: (k: string, v: string) => typeof res
+      json: (data: unknown) => typeof res
+    } = {
+      statusCode: 200,
+      headers: {},
+      body: null,
+      status(code: number) {
+        this.statusCode = code
+        return this
+      },
+      setHeader(k: string, v: string) {
+        this.headers[k] = v
+        return this
+      },
+      json(data: unknown) {
+        this.body = data
+        return this
+      },
+    }
+    return res
+  }
+
+  it('rejects non-POST requests with 405', async () => {
+    const req = { method: 'GET' } as any
+    const res = createMockResponse()
+    await scanHandler(req, res as any)
+    expect(res.statusCode).toBe(405)
+  })
+
+  it('returns demo netlist with X-Demo: 1 when GEMINI_API_KEY is unset', async () => {
+    const prevKey = process.env.GEMINI_API_KEY
+    delete process.env.GEMINI_API_KEY
+    try {
+      const req = { method: 'POST', body: { image: 'fake-base64' } } as any
+      const res = createMockResponse()
+      await scanHandler(req, res as any)
+      expect(res.statusCode).toBe(200)
+      expect(res.headers['X-Demo']).toBe('1')
+      expect(res.body).toEqual(DEMO_NETLIST)
+    } finally {
+      if (prevKey) process.env.GEMINI_API_KEY = prevKey
+    }
+  })
+
+  it('rejects missing image with 400', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    try {
+      const req = { method: 'POST', body: {} } as any
+      const res = createMockResponse()
+      await scanHandler(req, res as any)
+      expect(res.statusCode).toBe(400)
+      expect((res.body as any).error).toContain('Missing image field')
+    } finally {
+      delete process.env.GEMINI_API_KEY
+    }
+  })
+
+  it('rejects unsupported mimeType with 400', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    try {
+      const req = { method: 'POST', body: { image: 'dGVzdA==', mimeType: 'image/gif' } } as any
+      const res = createMockResponse()
+      await scanHandler(req, res as any)
+      expect(res.statusCode).toBe(400)
+      expect((res.body as any).error).toContain('Unsupported mimeType')
+    } finally {
+      delete process.env.GEMINI_API_KEY
+    }
+  })
+
+  it('rejects image >4MB with 413', async () => {
+    process.env.GEMINI_API_KEY = 'test-key'
+    try {
+      const hugeImage = 'A'.repeat(4 * 1024 * 1024 + 100)
+      const req = { method: 'POST', body: { image: hugeImage } } as any
+      const res = createMockResponse()
+      await scanHandler(req, res as any)
+      expect(res.statusCode).toBe(413)
+      expect((res.body as any).error).toContain('Image exceeds 4MB limit')
+    } finally {
+      delete process.env.GEMINI_API_KEY
+    }
   })
 })
