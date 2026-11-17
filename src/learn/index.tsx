@@ -1,92 +1,79 @@
 /**
- * src/learn/index.tsx — Learn screen: Predict tab + Fault Hunt tab
+ * src/learn/index.tsx — Learn screen: home (two mode cards) + Predict game + Fault Hunt game
  *
- * Predict:
- *  - Accepts router state { netlist, mode: 'predict' } from Build mode.
- *  - Otherwise shows 4 preset challenges.
- *  - Ask → Choose → Reveal (run solve, glow bulbs, grade, play audio) → Next.
+ * Learn home:
+ *  - Two big cards, "Predict" and "Fault Hunt", each showing a best score read from
+ *    localStorage.
  *
- * Fault Hunt:
- *  - 3 puzzles from puzzles.ts.
- *  - Tap the broken component → correct (fix + solve) or wrong (try again, hint after 2).
+ * Predict game:
+ *  - 10 pre-authored questions from content/puzzles/predict.ts (every answer is
+ *    cross-checked against solve() in content/puzzles/puzzles.test.ts).
+ *  - Ask → choose → reveal (run solve, glow bulbs, show why) → next.
+ *  - 1 point per question, correct on the first (only) choice. End screen with score,
+ *    stars, and the thinking skills practised.
  *
- * Level Goal-Checks:
- *  - Uses describeCircuit() (topology + counts) and SolveResult (component states + errors) from src/physics
- *  - Gracefully stops audio using stopAll() from src/audio
+ * Fault Hunt game:
+ *  - 10 pre-authored puzzles from content/puzzles/faults.ts.
+ *  - Tap the broken component → correct (swap in the fixed netlist, re-solve) or wrong
+ *    (show why, hint after 2 wrong taps). 1 point if the very first tap was correct.
+ *
+ * Predict-from-Build (unscored):
+ *  - Build mode can route here with router state { netlist, mode: 'predict' } carrying
+ *    the student's own circuit. Shown as a single, ungraded question using
+ *    describeCircuit() + SolveResult for dynamic structural feedback (gradeResult /
+ *    challengeAudio below), since there is no pre-authored answer for an arbitrary
+ *    user-built circuit.
  */
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
 import { describeCircuit } from '../physics/describe'
-// TODO: Codex (L2) is refining stopAll() in src/audio; calling existing stopAll() from src/audio
 import { playClip, playSequence, stopAll } from '../audio'
 import { useLanguage } from '../app/lang'
 import { useLearnStrings } from './useLearnStrings'
 import GlowCircuitSVG from './GlowCircuitSVG'
-import { FAULT_PUZZLES } from './puzzles'
+import { PREDICT_QUESTIONS } from '../../content/puzzles/predict'
+import { FAULT_QUESTIONS } from '../../content/puzzles/faults'
+import type { SkillKey } from '../../content/puzzles/types'
 
-/* ── Preset Predict challenges ──────────────────────────────────── */
-const PRESET_CHALLENGES: Array<{ key: string; netlist: Netlist }> = [
-  {
-    key: 'series',
-    netlist: {
-      gridSize: 4,
-      source: 'build',
-      components: [
-        { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
-        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
-        { id: 'bulb2', type: 'bulb', from: { row: 0, col: 2 }, to: { row: 0, col: 3 } },
-        { id: 'wire1', type: 'wire', from: { row: 0, col: 3 }, to: { row: 0, col: 0 } },
-      ],
-    },
-  },
-  {
-    key: 'parallel',
-    netlist: {
-      gridSize: 3,
-      source: 'build',
-      components: [
-        { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
-        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
-        { id: 'bulb2', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
-        { id: 'wire1', type: 'wire', from: { row: 0, col: 2 }, to: { row: 0, col: 0 } },
-      ],
-    },
-  },
-  {
-    key: 'switch',
-    netlist: {
-      gridSize: 4,
-      source: 'build',
-      components: [
-        { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
-        { id: 'switch1', type: 'switch', from: { row: 0, col: 1 }, to: { row: 0, col: 2 }, closed: false },
-        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 2 }, to: { row: 0, col: 3 } },
-        { id: 'wire1', type: 'wire', from: { row: 0, col: 3 }, to: { row: 0, col: 0 } },
-      ],
-    },
-  },
-  {
-    key: 'resistor',
-    netlist: {
-      gridSize: 4,
-      source: 'build',
-      components: [
-        { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
-        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
-        { id: 'resistor1', type: 'resistor', from: { row: 0, col: 2 }, to: { row: 0, col: 3 }, value: 10 },
-        { id: 'wire1', type: 'wire', from: { row: 0, col: 3 }, to: { row: 0, col: 0 } },
-      ],
-    },
-  },
-]
+type LearnStr = ReturnType<typeof useLearnStrings>
+
+const BEST_PREDICT_KEY = 'pahunch_learn_best_predict'
+const BEST_FAULT_KEY = 'pahunch_learn_best_fault'
+
+function readBestScore(key: string): number {
+  try {
+    const raw = window.localStorage.getItem(key)
+    const n = raw ? parseInt(raw, 10) : 0
+    return Number.isFinite(n) ? n : 0
+  } catch {
+    return 0
+  }
+}
+
+function saveBestScore(key: string, score: number): void {
+  try {
+    if (score > readBestScore(key)) window.localStorage.setItem(key, String(score))
+  } catch { /* localStorage may be unavailable (private mode, quota) */ }
+}
+
+function starsFor(score: number): number {
+  if (score >= 9) return 3
+  if (score >= 6) return 2
+  if (score >= 3) return 1
+  return 0
+}
+
+function skillLabel(s: LearnStr, skill: SkillKey): string {
+  return (s[`skill_${skill}` as keyof LearnStr] as unknown as string) ?? skill
+}
+
+/* ── Predict-from-Build (custom, unscored) ──────────────────────── */
 
 export type PredictOption = 'both_bright' | 'both_dim' | 'one_each' | 'both_off'
 
-/**
- * Evaluates circuit outcome using both SolveResult and describeCircuit() structure.
- */
+/** Evaluates circuit outcome for an arbitrary (not pre-authored) netlist. */
 export function gradeResult(result: SolveResult, netlist: Netlist): PredictOption {
   const desc = describeCircuit(netlist)
   const bulbIds = new Set(
@@ -99,67 +86,28 @@ export function gradeResult(result: SolveResult, netlist: Netlist): PredictOptio
     return 'both_off'
   }
   if (bulbs.length === 1) {
-    const s = bulbs[0].state
-    if (s === 'bright' || s === 'normal') return 'both_bright'
-    if (s === 'dim') return 'both_dim'
+    const st = bulbs[0].state
+    if (st === 'bright' || st === 'normal') return 'both_bright'
+    if (st === 'dim') return 'both_dim'
     return 'both_off'
   }
-  // Two or more bulbs
   const states = bulbs.map((b) => b.state)
-  const allOff = states.every((s) => s === 'off')
+  const allOff = states.every((st) => st === 'off')
   if (allOff) return 'both_off'
-  const allBright = states.every((s) => s === 'bright' || s === 'normal')
+  const allBright = states.every((st) => st === 'bright' || st === 'normal')
   if (allBright) return 'both_bright'
-  const allDim = states.every((s) => s === 'dim')
+  const allDim = states.every((st) => st === 'dim')
   if (allDim) return 'both_dim'
   return 'one_each'
 }
 
-/**
- * Determines appropriate explanation & follow-up suggestion based on challenge key
- * or dynamic structural analysis via describeCircuit().
- */
+/** Dynamic structural explanation for an arbitrary (not pre-authored) netlist. */
 export function challengeAudio(
-  key: string,
   netlist: Netlist,
   result: SolveResult,
 ): { explain: string; explainText: string; try: string; tryText: string } {
   const desc = describeCircuit(netlist)
 
-  if (key === 'series') {
-    return {
-      explain: 'explain_series',
-      explainText: 'In series, they share voltage and glow dim.',
-      try: 'try_parallel',
-      tryText: 'Try connecting bulbs in parallel instead.',
-    }
-  }
-  if (key === 'parallel') {
-    return {
-      explain: 'explain_parallel',
-      explainText: 'In parallel, each bulb gets full voltage.',
-      try: 'try_series',
-      tryText: 'Try connecting bulbs in series instead.',
-    }
-  }
-  if (key === 'switch') {
-    return {
-      explain: 'explain_open',
-      explainText: 'The open switch breaks the circuit.',
-      try: 'try_switch',
-      tryText: 'Try closing the switch to complete the circuit.',
-    }
-  }
-  if (key === 'resistor') {
-    return {
-      explain: 'explain_resistor',
-      explainText: 'The resistor limits current, so the bulb is dim.',
-      try: 'try_series',
-      tryText: 'Try connecting bulbs in series instead.',
-    }
-  }
-
-  // Dynamic analysis for custom or user-built circuits
   if (result.errors.includes('short_circuit')) {
     return {
       explain: 'explain_short',
@@ -208,150 +156,44 @@ export function challengeAudio(
   }
 }
 
-/* ── Fault Hunt state ───────────────────────────────────────────── */
-interface FaultState {
-  puzzleIndex: number
-  wrongTries: number
-  phase: 'playing' | 'correct' | 'fixed'
-  fixedNetlist?: Netlist
-  fixedResult?: SolveResult
-  lastTapped?: string
-}
+type CustomPhase =
+  | { kind: 'question' }
+  | { kind: 'revealed'; result: SolveResult; chosen: PredictOption; correct: boolean }
 
-/* ── Main component ─────────────────────────────────────────────── */
-export default function LearnScreen() {
-  const navigate = useNavigate()
-  const location = useLocation()
-  const { lang } = useLanguage()
-  const s = useLearnStrings()
-  const [tab, setTab] = useState<'predict' | 'fault'>('predict')
-
-  // Check if Build mode sent us a netlist
-  const routeState = location.state as { netlist?: Netlist; mode?: string } | null
-  const externalNetlist = routeState?.mode === 'predict' ? routeState.netlist : undefined
-
-  // Stop any active audio clips when leaving the Learn screen
-  useEffect(() => {
-    return () => {
-      stopAll()
-    }
-  }, [])
-
-  const handleTabChange = useCallback((nextTab: 'predict' | 'fault') => {
-    stopAll()
-    setTab(nextTab)
-  }, [])
-
-  return (
-    <>
-      <style>{STYLES}</style>
-      <main className="learn-screen">
-        <header className="learn-header">
-          <button className="back-btn" onClick={() => navigate('/')} aria-label="Go back to home">←</button>
-          <h1 className="learn-title">Learn</h1>
-        </header>
-
-        {/* Tabs */}
-        <div className="tab-row" role="tablist">
-          <button
-            role="tab"
-            aria-selected={tab === 'predict'}
-            className={`tab-btn ${tab === 'predict' ? 'tab-active' : ''}`}
-            onClick={() => handleTabChange('predict')}
-          >
-            {s.tab_predict}
-          </button>
-          <button
-            role="tab"
-            aria-selected={tab === 'fault'}
-            className={`tab-btn ${tab === 'fault' ? 'tab-active' : ''}`}
-            onClick={() => handleTabChange('fault')}
-          >
-            {s.tab_fault}
-          </button>
-        </div>
-
-        <div className="learn-content">
-          {tab === 'predict' && (
-            <PredictTab lang={lang} s={s} externalNetlist={externalNetlist} navigate={navigate} />
-          )}
-          {tab === 'fault' && (
-            <FaultTab lang={lang} s={s} />
-          )}
-        </div>
-      </main>
-    </>
-  )
-}
-
-/* ── Predict Tab ─────────────────────────────────────────────────── */
-
-type LearnStr = ReturnType<typeof useLearnStrings>
-
-interface PredictTabProps {
+function CustomPredict({
+  lang,
+  s,
+  netlist,
+  onDone,
+  navigate,
+}: {
   lang: 'en' | 'kn'
   s: LearnStr
-  externalNetlist?: Netlist
+  netlist: Netlist
+  onDone: () => void
   navigate: ReturnType<typeof useNavigate>
-}
-
-type PredictPhase =
-  | { kind: 'choose' }                    // picking a preset
-  | { kind: 'question'; challengeKey: string; netlist: Netlist }
-  | { kind: 'revealed'; challengeKey: string; netlist: Netlist; result: SolveResult; chosen: PredictOption; correct: boolean }
-
-function PredictTab({ lang, s, externalNetlist, navigate }: PredictTabProps) {
-  const [phase, setPhase] = useState<PredictPhase>(() =>
-    externalNetlist
-      ? { kind: 'question', challengeKey: 'custom', netlist: externalNetlist }
-      : { kind: 'choose' },
-  )
-  const [score, setScore] = useState({ correct: 0, total: 0 })
+}) {
+  const [phase, setPhase] = useState<CustomPhase>({ kind: 'question' })
   const audioQueued = useRef(false)
 
-  // Play question audio when entering question phase
   useEffect(() => {
     if (phase.kind !== 'question') return
     if (audioQueued.current) return
     audioQueued.current = true
     void playClip(lang, 'predict_question', s.predict_question)
-    return () => { audioQueued.current = false }
   }, [phase.kind, lang, s.predict_question])
 
-  const startChallenge = useCallback((key: string, netlist: Netlist) => {
-    stopAll()
-    audioQueued.current = false
-    setPhase({ kind: 'question', challengeKey: key, netlist })
-  }, [])
-
   const handleChoose = useCallback(
-    async (chosen: PredictOption, challengeKey: string, netlist: Netlist) => {
+    async (chosen: PredictOption) => {
       const result = solve(netlist)
       const actual = gradeResult(result, netlist)
       const correct = chosen === actual
-
-      setScore((prev) => ({
-        correct: prev.correct + (correct ? 1 : 0),
-        total: prev.total + 1,
-      }))
-
-      setPhase({ kind: 'revealed', challengeKey, netlist, result, chosen, correct })
-
-      const audio = challengeAudio(challengeKey, netlist, result)
-      await playSequence(lang, [
-        correct ? 'correct' : 'not_quite',
-        audio.explain,
-        audio.try,
-      ])
+      setPhase({ kind: 'revealed', result, chosen, correct })
+      const audio = challengeAudio(netlist, result)
+      await playSequence(lang, [correct ? 'correct' : 'not_quite', audio.explain, audio.try])
     },
-    [lang],
+    [lang, netlist],
   )
-
-  const tryAnother = useCallback(() => {
-    stopAll()
-    audioQueued.current = false
-    setPhase({ kind: 'choose' })
-  }, [])
 
   const optionKeys: PredictOption[] = ['both_bright', 'both_dim', 'one_each', 'both_off']
   const optionLabels: Record<PredictOption, string> = {
@@ -361,190 +203,336 @@ function PredictTab({ lang, s, externalNetlist, navigate }: PredictTabProps) {
     both_off: s.opt_both_off,
   }
 
-  return (
-    <>
-      {/* Score */}
-      <div className="score-row" aria-live="polite">
-        <span className="score-label">{s.score_label}:</span>
-        <span className="score-value">{score.correct} / {score.total}</span>
-      </div>
+  if (phase.kind === 'question') {
+    return (
+      <section aria-label="Predict question">
+        <p className="section-hint">{s.predict_question}</p>
+        <div className="circuit-center">
+          <GlowCircuitSVG netlist={netlist} />
+        </div>
+        <div className="option-grid">
+          {optionKeys.map((opt) => (
+            <button key={opt} className="option-btn" onClick={() => void handleChoose(opt)}>
+              {optionLabels[opt]}
+            </button>
+          ))}
+        </div>
+      </section>
+    )
+  }
 
-      {phase.kind === 'choose' && (
-        <section aria-label="Choose a challenge">
-          <p className="section-hint">{s.predict_title}</p>
-          <div className="challenge-grid">
-            {PRESET_CHALLENGES.map(({ key, netlist }) => (
-              <button
-                key={key}
-                className="challenge-card"
-                onClick={() => startChallenge(key, netlist)}
-              >
-                <GlowCircuitSVG netlist={netlist} />
-                <span className="challenge-label">
-                  {s[`challenge_${key}` as keyof LearnStr] ?? key}
-                </span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {phase.kind === 'question' && (
-        <section aria-label="Predict question">
-          <p className="section-hint">{s.predict_question}</p>
-          <div className="circuit-center">
-            <GlowCircuitSVG netlist={phase.netlist} />
-          </div>
-          <div className="option-grid">
-            {optionKeys.map((opt) => (
-              <button
-                key={opt}
-                className="option-btn"
-                onClick={() => void handleChoose(opt, phase.challengeKey, phase.netlist)}
-              >
-                {optionLabels[opt]}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {phase.kind === 'revealed' && (
-        <RevealedView
-          phase={phase}
-          s={s}
-          lang={lang}
-          optionLabels={optionLabels}
-          onTryAnother={tryAnother}
-          onOpenBuild={() => navigate('/build', { state: { netlist: phase.netlist } })}
-        />
-      )}
-    </>
-  )
-}
-
-interface RevealedViewProps {
-  phase: Extract<PredictPhase, { kind: 'revealed' }>
-  s: LearnStr
-  lang: 'en' | 'kn'
-  optionLabels: Record<PredictOption, string>
-  onTryAnother: () => void
-  onOpenBuild: () => void
-}
-
-function RevealedView({ phase, s, optionLabels, onTryAnother, onOpenBuild }: RevealedViewProps) {
-  const audio = challengeAudio(phase.challengeKey, phase.netlist, phase.result)
-  const explanationKey = `explain_${phase.challengeKey}` as keyof LearnStr
-  const explanationText = (s[explanationKey] as string | undefined) ?? audio.explainText
-
+  const audio = challengeAudio(netlist, phase.result)
   return (
     <section aria-label="Result" aria-live="polite">
       <div className={`result-banner ${phase.correct ? 'banner-correct' : 'banner-wrong'}`} role="status">
         {phase.correct ? s.correct_msg : s.wrong_msg}
       </div>
-
       <div className="circuit-center">
-        <GlowCircuitSVG
-          netlist={phase.netlist}
-          solveResult={phase.result}
-          revealed={true}
-        />
+        <GlowCircuitSVG netlist={netlist} solveResult={phase.result} revealed />
       </div>
-
       <div className="chosen-row">
         <span className="chosen-label">Your answer:</span>
         <span className={`chosen-value ${phase.correct ? 'correct-text' : 'wrong-text'}`}>
           {optionLabels[phase.chosen]}
         </span>
       </div>
-
       <div className="explain-box">
-        <p className="explain-text">{explanationText}</p>
+        <p className="explain-text">{audio.explainText}</p>
       </div>
-
       <div className="action-row">
-        <button className="btn-primary" onClick={onTryAnother}>{s.try_another}</button>
-        <button className="btn-secondary" onClick={onOpenBuild}>{s.open_build}</button>
+        <button className="btn-primary" onClick={onDone}>{s.try_another}</button>
+        <button className="btn-secondary" onClick={() => navigate('/build', { state: { netlist } })}>{s.open_build}</button>
       </div>
     </section>
   )
 }
 
-/* ── Fault Hunt Tab ──────────────────────────────────────────────── */
+/* ── Shared progress / end-screen pieces ────────────────────────── */
 
-interface FaultTabProps {
-  lang: 'en' | 'kn'
-  s: LearnStr
+function ProgressHeader({ s, index, total, score }: { s: LearnStr; index: number; total: number; score: number }) {
+  const progressText = s.question_progress
+    .replace('{n}', String(index + 1))
+    .replace('{total}', String(total))
+  return (
+    <>
+      <p className="section-hint">{progressText}</p>
+      <div className="score-row" aria-live="polite">
+        <span className="score-label">{s.score_label}:</span>
+        <span className="score-value">{score} / {total}</span>
+      </div>
+    </>
+  )
 }
 
-function FaultTab({ lang, s }: FaultTabProps) {
-  const [state, setState] = useState<FaultState>({
-    puzzleIndex: 0,
-    wrongTries: 0,
-    phase: 'playing',
-  })
+function ProgressDots({ total, current }: { total: number; current: number }) {
+  return (
+    <div className="puzzle-dots" aria-label={`${current + 1} / ${total}`}>
+      {Array.from({ length: total }, (_, i) => (
+        <span key={i} className={`dot ${i === current ? 'dot-active' : ''} ${i < current ? 'dot-done' : ''}`} />
+      ))}
+    </div>
+  )
+}
+
+function EndScreen({
+  s,
+  score,
+  total,
+  skills,
+  onTryAgain,
+  switchLabel,
+  onSwitch,
+}: {
+  s: LearnStr
+  score: number
+  total: number
+  skills: SkillKey[]
+  onTryAgain: () => void
+  switchLabel: string
+  onSwitch: () => void
+}) {
+  const stars = starsFor(score)
+  return (
+    <section aria-label="Results" aria-live="polite" className="end-screen">
+      <p className="end-title">{s.end_title}</p>
+      <p className="end-score">{score}/{total}</p>
+      <p className="end-stars" aria-hidden="true">{'★'.repeat(stars)}{'☆'.repeat(3 - stars)}</p>
+      <p className="end-skills-label">{s.end_skills_label}</p>
+      <div className="skill-pill-row">
+        {skills.map((skill) => (
+          <span key={skill} className="skill-pill">{skillLabel(s, skill)}</span>
+        ))}
+      </div>
+      <div className="action-row">
+        <button className="btn-primary" onClick={onTryAgain}>{s.try_again}</button>
+        <button className="btn-secondary" onClick={onSwitch}>{switchLabel}</button>
+      </div>
+    </section>
+  )
+}
+
+/* ── Predict game (10 questions, scored) ────────────────────────── */
+
+interface PredictGameState {
+  index: number
+  score: number
+  phase: 'question' | 'revealed' | 'end'
+  chosenKey?: string
+  result?: SolveResult
+}
+
+function PredictGame({
+  lang,
+  s,
+  onSwitchToFault,
+}: {
+  lang: 'en' | 'kn'
+  s: LearnStr
+  onSwitchToFault: () => void
+}) {
+  const [state, setState] = useState<PredictGameState>({ index: 0, score: 0, phase: 'question' })
+  const audioQueued = useRef(false)
+  const question = PREDICT_QUESTIONS[state.index]
+
+  useEffect(() => {
+    if (state.phase !== 'question') return
+    if (audioQueued.current) return
+    audioQueued.current = true
+    void playClip(lang, `predict_q_${question.id}`, question.question[lang])
+  }, [state.phase, state.index, lang, question])
+
+  const handleChoose = useCallback(
+    async (optionKey: string) => {
+      const result = solve(question.netlist)
+      const correct = optionKey === question.correctKey
+      setState((prev) => ({
+        ...prev,
+        phase: 'revealed',
+        chosenKey: optionKey,
+        result,
+        score: prev.score + (correct ? 1 : 0),
+      }))
+      await playSequence(lang, [correct ? 'correct' : 'not_quite'], () => question.why[lang])
+    },
+    [lang, question],
+  )
+
+  const handleNext = useCallback(() => {
+    stopAll()
+    audioQueued.current = false
+    setState((prev) => {
+      const nextIndex = prev.index + 1
+      if (nextIndex >= PREDICT_QUESTIONS.length) {
+        saveBestScore(BEST_PREDICT_KEY, prev.score)
+        return { ...prev, phase: 'end' }
+      }
+      return { index: nextIndex, score: prev.score, phase: 'question' }
+    })
+  }, [])
+
+  const handleRestart = useCallback(() => {
+    stopAll()
+    audioQueued.current = false
+    setState({ index: 0, score: 0, phase: 'question' })
+  }, [])
+
+  if (state.phase === 'end') {
+    const skills = Array.from(new Set(PREDICT_QUESTIONS.map((q) => q.skill)))
+    return (
+      <EndScreen
+        s={s}
+        score={state.score}
+        total={PREDICT_QUESTIONS.length}
+        skills={skills}
+        onTryAgain={handleRestart}
+        switchLabel={s.go_to_fault}
+        onSwitch={onSwitchToFault}
+      />
+    )
+  }
+
+  return (
+    <section aria-label="Predict">
+      <ProgressHeader s={s} index={state.index} total={PREDICT_QUESTIONS.length} score={state.score} />
+      <p className="section-hint">{question.question[lang]}</p>
+      <div className="circuit-center">
+        <GlowCircuitSVG
+          netlist={question.netlist}
+          solveResult={state.phase === 'revealed' ? state.result : undefined}
+          revealed={state.phase === 'revealed'}
+        />
+      </div>
+
+      {state.phase === 'question' && (
+        <div className="option-grid">
+          {question.options.map((opt) => (
+            <button key={opt.key} className="option-btn" onClick={() => void handleChoose(opt.key)}>
+              {opt.text[lang]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {state.phase === 'revealed' && (
+        <>
+          <div
+            className={`result-banner ${state.chosenKey === question.correctKey ? 'banner-correct' : 'banner-wrong'}`}
+            role="status"
+          >
+            {state.chosenKey === question.correctKey ? s.correct_msg : s.wrong_msg}
+          </div>
+          <div className="explain-box">
+            <p className="explain-text">{question.why[lang]}</p>
+          </div>
+          <div className="action-row">
+            <button className="btn-primary" onClick={handleNext}>{s.next_question}</button>
+          </div>
+        </>
+      )}
+
+      <ProgressDots total={PREDICT_QUESTIONS.length} current={state.index} />
+    </section>
+  )
+}
+
+/* ── Fault Hunt game (10 puzzles, scored) ───────────────────────── */
+
+interface FaultGameState {
+  index: number
+  score: number
+  wrongTries: number
+  phase: 'playing' | 'fixed' | 'end'
+  firstTapCorrect?: boolean
+  lastTapped?: string
+  fixedResult?: SolveResult
+}
+
+function FaultGame({
+  lang,
+  s,
+  onSwitchToPredict,
+}: {
+  lang: 'en' | 'kn'
+  s: LearnStr
+  onSwitchToPredict: () => void
+}) {
+  const [state, setState] = useState<FaultGameState>({ index: 0, score: 0, wrongTries: 0, phase: 'playing' })
   const introPlayed = useRef(false)
+  const question = FAULT_QUESTIONS[state.index]
 
-  const puzzle = FAULT_PUZZLES[state.puzzleIndex]
-
-  // Play intro + prompt when puzzle starts
   useEffect(() => {
     if (state.phase !== 'playing') return
     if (introPlayed.current) return
     introPlayed.current = true
-    void playSequence(lang, ['fault_intro', puzzle.promptClip])
-  }, [state.puzzleIndex, state.phase, lang, puzzle.promptClip])
+    void playSequence(lang, ['fault_intro', `fault_q_${question.id}`], (name) =>
+      name === 'fault_intro' ? s.fault_intro : question.prompt[lang],
+    )
+  }, [state.phase, state.index, lang, question, s.fault_intro])
 
   const handleTap = useCallback(
     async (componentId: string) => {
       if (state.phase !== 'playing') return
-
-      const isCorrect = componentId === puzzle.faultyId
+      const isCorrect = componentId === question.faultyId
+      const lockedFirstTap = state.firstTapCorrect === undefined ? isCorrect : state.firstTapCorrect
 
       if (isCorrect) {
-        // Goal check: run solve() and describeCircuit() on the fixed netlist
-        const fixedResult = solve(puzzle.fixedNetlist)
-        const fixedDesc = describeCircuit(puzzle.fixedNetlist)
-        const isGoalMet =
-          fixedResult.ok && fixedDesc.topology !== 'incomplete' && fixedDesc.topology !== 'empty'
-
-        if (isGoalMet) {
-          setState((prev) => ({
-            ...prev,
-            phase: 'correct',
-            fixedNetlist: puzzle.fixedNetlist,
-            fixedResult,
-            lastTapped: componentId,
-          }))
-          await playSequence(lang, ['fault_correct', 'fault_fixed'], (name) => name === 'fault_correct' ? s.fault_correct : s.fault_fixed)
-          setState((prev) => ({ ...prev, phase: 'fixed' }))
-        }
+        const fixedResult = solve(question.fixedNetlist)
+        setState((prev) => ({ ...prev, phase: 'fixed', lastTapped: componentId, firstTapCorrect: lockedFirstTap, fixedResult }))
+        await playSequence(lang, ['fault_correct', 'fault_fixed'], (name) =>
+          name === 'fault_correct' ? s.fault_correct : s.fault_fixed,
+        )
       } else {
         const newWrong = state.wrongTries + 1
-        setState((prev) => ({ ...prev, wrongTries: newWrong, lastTapped: componentId }))
+        setState((prev) => ({ ...prev, wrongTries: newWrong, lastTapped: componentId, firstTapCorrect: lockedFirstTap }))
         const clips = newWrong >= 2 ? ['fault_wrong', 'fault_hint'] : ['fault_wrong']
-        await playSequence(lang, clips, (name) => name === 'fault_wrong' ? s.fault_wrong : puzzle.hintText)
+        await playSequence(lang, clips, (name) => (name === 'fault_wrong' ? s.fault_wrong : question.hint[lang]))
       }
     },
-    [state, puzzle, lang, s],
+    [state, question, lang, s],
   )
 
-  const nextPuzzle = useCallback(() => {
+  const handleNext = useCallback(() => {
     stopAll()
     introPlayed.current = false
-    setState({
-      puzzleIndex: (state.puzzleIndex + 1) % FAULT_PUZZLES.length,
-      wrongTries: 0,
-      phase: 'playing',
+    setState((prev) => {
+      const earned = prev.firstTapCorrect === true ? 1 : 0
+      const newScore = prev.score + earned
+      const nextIndex = prev.index + 1
+      if (nextIndex >= FAULT_QUESTIONS.length) {
+        saveBestScore(BEST_FAULT_KEY, newScore)
+        return { index: prev.index, score: newScore, wrongTries: 0, phase: 'end' }
+      }
+      return { index: nextIndex, score: newScore, wrongTries: 0, phase: 'playing' }
     })
-  }, [state.puzzleIndex])
+  }, [])
 
-  const displayNetlist =
-    state.phase === 'fixed' && state.fixedNetlist ? state.fixedNetlist : puzzle.brokenNetlist
+  const handleRestart = useCallback(() => {
+    stopAll()
+    introPlayed.current = false
+    setState({ index: 0, score: 0, wrongTries: 0, phase: 'playing' })
+  }, [])
+
+  if (state.phase === 'end') {
+    const skills = Array.from(new Set(FAULT_QUESTIONS.map((q) => q.skill)))
+    return (
+      <EndScreen
+        s={s}
+        score={state.score}
+        total={FAULT_QUESTIONS.length}
+        skills={skills}
+        onTryAgain={handleRestart}
+        switchLabel={s.go_to_predict}
+        onSwitch={onSwitchToPredict}
+      />
+    )
+  }
+
+  const displayNetlist = state.phase === 'fixed' ? question.fixedNetlist : question.brokenNetlist
 
   return (
     <section aria-label={s.fault_title}>
-      <p className="section-hint">{s.fault_intro}</p>
+      <ProgressHeader s={s} index={state.index} total={FAULT_QUESTIONS.length} score={state.score} />
+      <p className="section-hint">{question.prompt[lang]}</p>
 
       <div className="circuit-center">
         <GlowCircuitSVG
@@ -552,7 +540,7 @@ function FaultTab({ lang, s }: FaultTabProps) {
           solveResult={state.phase === 'fixed' ? state.fixedResult : undefined}
           revealed={state.phase === 'fixed'}
           highlightId={
-            state.phase === 'playing' && state.lastTapped && state.lastTapped !== puzzle.faultyId
+            state.phase === 'playing' && state.lastTapped && state.lastTapped !== question.faultyId
               ? state.lastTapped
               : undefined
           }
@@ -565,41 +553,118 @@ function FaultTab({ lang, s }: FaultTabProps) {
           {state.wrongTries > 0 && (
             <div className="fault-feedback fault-wrong-msg" role="alert">
               {s.fault_wrong}
-              {state.wrongTries >= 2 && (
-                <span className="hint-inline"> {puzzle.hintText}</span>
-              )}
+              {state.wrongTries >= 2 && <span className="hint-inline"> {question.hint[lang]}</span>}
             </div>
           )}
-          <p className="tap-instruction">👆 Tap the broken part</p>
+          <p className="tap-instruction">{s.tap_instruction}</p>
         </>
-      )}
-
-      {state.phase === 'correct' && (
-        <div className="fault-feedback fault-correct-msg" role="status" aria-live="polite">
-          {s.fault_correct}
-        </div>
       )}
 
       {state.phase === 'fixed' && (
         <>
-          <div className="fault-feedback fault-fixed-msg" role="status" aria-live="polite">
-            {s.fault_fixed}
+          <div className="fault-feedback fault-fixed-msg" role="status" aria-live="polite">{s.fault_fixed}</div>
+          <div className="explain-box">
+            <p className="explain-text">{question.why[lang]}</p>
           </div>
           <div className="action-row" style={{ marginTop: '16px' }}>
-            <button className="btn-primary" onClick={nextPuzzle}>
-              {s.try_another}
-            </button>
+            <button className="btn-primary" onClick={handleNext}>{s.next_question}</button>
           </div>
         </>
       )}
 
-      {/* Puzzle indicator */}
-      <div className="puzzle-dots" aria-label={`Puzzle ${state.puzzleIndex + 1} of ${FAULT_PUZZLES.length}`}>
-        {FAULT_PUZZLES.map((_, i) => (
-          <span key={i} className={`dot ${i === state.puzzleIndex ? 'dot-active' : ''}`} />
-        ))}
-      </div>
+      <ProgressDots total={FAULT_QUESTIONS.length} current={state.index} />
     </section>
+  )
+}
+
+/* ── Learn home (two big cards) ─────────────────────────────────── */
+
+function LearnHome({ s, onPredict, onFault }: { s: LearnStr; onPredict: () => void; onFault: () => void }) {
+  const bestPredict = readBestScore(BEST_PREDICT_KEY)
+  const bestFault = readBestScore(BEST_FAULT_KEY)
+  return (
+    <div className="learn-home-grid">
+      <button className="learn-home-card" onClick={onPredict}>
+        <span className="home-card-title">{s.tab_predict}</span>
+        <span className="home-card-desc">{s.home_predict_desc}</span>
+        <span className="home-card-best">{s.best_score_label}: {bestPredict}/10</span>
+      </button>
+      <button className="learn-home-card" onClick={onFault}>
+        <span className="home-card-title">{s.tab_fault}</span>
+        <span className="home-card-desc">{s.home_fault_desc}</span>
+        <span className="home-card-best">{s.best_score_label}: {bestFault}/10</span>
+      </button>
+    </div>
+  )
+}
+
+/* ── Main component ─────────────────────────────────────────────── */
+
+type LearnView =
+  | { kind: 'home' }
+  | { kind: 'predict-custom'; netlist: Netlist }
+  | { kind: 'predict-game' }
+  | { kind: 'fault-game' }
+
+export default function LearnScreen() {
+  const navigate = useNavigate()
+  const location = useLocation()
+  const s = useLearnStrings()
+  const { lang } = useLanguage()
+
+  const routeState = location.state as { netlist?: Netlist; mode?: string } | null
+  const externalNetlist = routeState?.mode === 'predict' ? routeState.netlist : undefined
+
+  const [view, setView] = useState<LearnView>(() =>
+    externalNetlist ? { kind: 'predict-custom', netlist: externalNetlist } : { kind: 'home' },
+  )
+
+  useEffect(() => {
+    return () => {
+      stopAll()
+    }
+  }, [])
+
+  const goHome = useCallback(() => {
+    stopAll()
+    setView({ kind: 'home' })
+  }, [])
+
+  return (
+    <>
+      <style>{STYLES}</style>
+      <main className="learn-screen">
+        <header className="learn-header">
+          <button
+            className="back-btn"
+            onClick={() => (view.kind === 'home' ? navigate('/') : goHome())}
+            aria-label="Go back"
+          >
+            ←
+          </button>
+          <h1 className="learn-title">Learn</h1>
+        </header>
+
+        <div className="learn-content">
+          {view.kind === 'home' && (
+            <LearnHome
+              s={s}
+              onPredict={() => { stopAll(); setView({ kind: 'predict-game' }) }}
+              onFault={() => { stopAll(); setView({ kind: 'fault-game' }) }}
+            />
+          )}
+          {view.kind === 'predict-custom' && (
+            <CustomPredict lang={lang} s={s} netlist={view.netlist} onDone={goHome} navigate={navigate} />
+          )}
+          {view.kind === 'predict-game' && (
+            <PredictGame lang={lang} s={s} onSwitchToFault={() => { stopAll(); setView({ kind: 'fault-game' }) }} />
+          )}
+          {view.kind === 'fault-game' && (
+            <FaultGame lang={lang} s={s} onSwitchToPredict={() => { stopAll(); setView({ kind: 'predict-game' }) }} />
+          )}
+        </div>
+      </main>
+    </>
   )
 }
 
@@ -944,6 +1009,7 @@ const STYLES = `
     gap: 8px;
     justify-content: center;
     margin-top: 24px;
+    flex-wrap: wrap;
   }
   .dot {
     width: 8px;
@@ -952,5 +1018,57 @@ const STYLES = `
     background: rgba(241,230,207,0.25);
     transition: background var(--transition);
   }
-  .dot-active { background: var(--clr-accent); }
+  .dot-active { background: var(--clr-gold); }
+  .dot-done { background: var(--clr-accent); }
+
+  /* Learn home — two big mode cards */
+  .learn-home-grid {
+    display: grid;
+    gap: 14px;
+    width: 100%;
+  }
+  .learn-home-card {
+    background: var(--clr-surface);
+    border: 2px solid var(--clr-cream);
+    border-radius: var(--radius);
+    padding: 20px 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    text-align: left;
+    cursor: pointer;
+    min-height: 96px;
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .learn-home-card:hover, .learn-home-card:focus-visible {
+    box-shadow: 6px 6px 0 var(--clr-gold);
+    outline: 2px solid var(--clr-gold);
+    transform: translate(-2px, -2px);
+  }
+  .learn-home-card:active { transform: translateY(2px); box-shadow: none; }
+  .home-card-title { font-size: 1.2rem; font-weight: 800; color: var(--clr-cream); }
+  .home-card-desc { font-size: 0.88rem; color: rgba(241,230,207,0.65); }
+  .home-card-best { font-size: 0.85rem; font-weight: 700; color: var(--clr-gold); margin-top: 4px; }
+
+  /* End screen */
+  .end-screen { text-align: center; }
+  .end-title { font-size: 1.3rem; font-weight: 800; color: var(--clr-cream); margin: 0 0 4px; }
+  .end-score { font-size: 2.6rem; font-weight: 800; color: var(--clr-gold); margin: 0 0 4px; }
+  .end-stars { font-size: 1.8rem; letter-spacing: 4px; color: var(--clr-gold); margin: 0 0 20px; }
+  .end-skills-label { font-size: 0.9rem; color: rgba(241,230,207,0.6); margin: 0 0 10px; }
+  .skill-pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 22px;
+  }
+  .skill-pill {
+    background: var(--clr-surface);
+    border: 1px solid rgba(241,230,207,0.25);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 0.78rem;
+    color: var(--clr-cream);
+  }
 `
