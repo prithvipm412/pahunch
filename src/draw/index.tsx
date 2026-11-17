@@ -14,7 +14,7 @@
  *  - Confidence indicator (if below 0.6, shows "Please check the circuit")
  *  - "Try a sample drawing" button loading 3 bundled sample PNGs
  */
-import { useRef, useState, useCallback, useMemo } from 'react'
+import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Netlist, CircuitComponent, ComponentType, GridPoint, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
@@ -27,6 +27,16 @@ import { useOfflineQueue } from './offlineQueue'
 import sample1Png from './samples/sample1.png'
 import sample2Png from './samples/sample2.png'
 import sample3Png from './samples/sample3.png'
+import sample1Json from './samples/sample1.json'
+import sample2Json from './samples/sample2.json'
+import sample3Json from './samples/sample3.json'
+import { hashBase64, getCachedScan, setCachedScan } from './scanCache'
+
+const SAMPLES_DATA: Record<string, { png: string; netlist: Netlist }> = {
+  sample1_series: { png: sample1Png, netlist: sample1Json as Netlist },
+  sample2_parallel: { png: sample2Png, netlist: sample2Json as Netlist },
+  sample3_resistor: { png: sample3Png, netlist: sample3Json as Netlist },
+}
 
 const LABEL_NAMES: Record<string, string> = {
   battery: 'Battery',
@@ -62,14 +72,38 @@ export default function DrawScreen() {
   const fileRef = useRef<HTMLInputElement>(null)
   const [phase, setPhase] = useState<Phase>({ kind: 'idle' })
   const [showSamples, setShowSamples] = useState(false)
+  const [cooldownSeconds, setCooldownSeconds] = useState(0)
 
-  // Offline queue
-  const queueSender = useCallback(async (base64: string): Promise<boolean> => {
+  // Countdown timer for 429 rate limit cooldown
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return
+    const timer = setInterval(() => {
+      setCooldownSeconds((prev) => Math.max(0, prev - 1))
+    }, 1000)
+    return () => clearInterval(timer)
+  }, [cooldownSeconds])
+
+  // Offline queue sender with rate limit detection & cache update
+  const queueSender = useCallback(async (base64: string) => {
     const result = await scanCircuit(base64)
-    return result.ok
+    if (result.ok) {
+      const hash = hashBase64(base64)
+      setCachedScan(hash, {
+        netlist: result.netlist,
+        confidence: result.confidence,
+        isDemo: result.isDemo,
+      })
+      return { ok: true, rateLimited: false }
+    }
+    return { ok: false, rateLimited: result.reason === 'rate_limit' }
   }, [])
 
-  const { size: queueSize, save: saveToQueue, isDraining } = useOfflineQueue(queueSender)
+  const {
+    size: queueSize,
+    save: saveToQueue,
+    isDraining,
+    progress: queueProgress,
+  } = useOfflineQueue(queueSender)
 
   const handleFile = useCallback(
     async (file: File | Blob, options?: { skipBlur?: boolean }) => {
@@ -90,6 +124,20 @@ export default function DrawScreen() {
         return
       }
 
+      // Check scan cache: repeat photo returns instantly without API call
+      const hash = hashBase64(base64)
+      const cached = getCachedScan(hash)
+      if (cached) {
+        setPhase({
+          kind: 'result',
+          previewUrl,
+          netlist: cached.netlist,
+          confidence: cached.confidence,
+          isDemo: cached.isDemo,
+        })
+        return
+      }
+
       setPhase({ kind: 'scanning', previewUrl })
 
       const first = await scanCircuit(base64)
@@ -103,10 +151,12 @@ export default function DrawScreen() {
             blurry: false,
           })
         } else if (first.reason === 'rate_limit') {
+          const sec = first.retryAfterSeconds ?? 30
+          setCooldownSeconds(sec)
           setPhase({
             kind: 'error',
             previewUrl,
-            message: s.rate_limit_error,
+            message: `Busy, try again in ${sec}s`,
             blurry: false,
           })
         } else {
@@ -136,6 +186,13 @@ export default function DrawScreen() {
         }
       }
 
+      // Save successful scan to cache
+      setCachedScan(hash, {
+        netlist: finalNetlist,
+        confidence,
+        isDemo,
+      })
+
       setPhase({
         kind: 'result',
         previewUrl,
@@ -156,24 +213,19 @@ export default function DrawScreen() {
     [handleFile],
   )
 
-  const handleSelectSample = useCallback(
-    async (src: string, name: string) => {
-      setShowSamples(false)
-      try {
-        const res = await fetch(src)
-        const blob = await res.blob()
-        const file = new File([blob], `${name}.png`, { type: 'image/png' })
-        void handleFile(file, { skipBlur: true })
-      } catch {
-        setPhase({
-          kind: 'error',
-          message: 'Could not load sample drawing.',
-          blurry: false,
-        })
-      }
-    },
-    [handleFile],
-  )
+  const handleSelectSample = useCallback((sampleKey: string) => {
+    setShowSamples(false)
+    const sample = SAMPLES_DATA[sampleKey]
+    if (sample) {
+      setPhase({
+        kind: 'result',
+        previewUrl: sample.png,
+        netlist: sample.netlist,
+        confidence: 1.0,
+        isDemo: false,
+      })
+    }
+  }, [])
 
   const retake = useCallback(() => {
     setShowSamples(false)
@@ -207,7 +259,9 @@ export default function DrawScreen() {
 
         {isDraining && (
           <div className="drain-banner" role="status" aria-live="polite">
-            {s.queue_sending}
+            {queueProgress
+              ? `Sending saved circuit ${queueProgress.current} of ${queueProgress.total}…`
+              : s.queue_sending}
           </div>
         )}
 
@@ -227,10 +281,11 @@ export default function DrawScreen() {
               <button
                 className="photo-btn"
                 onClick={() => fileRef.current?.click()}
-                aria-label={s.take_photo}
+                aria-label={cooldownSeconds > 0 ? `Busy, try again in ${cooldownSeconds}s` : s.take_photo}
+                disabled={cooldownSeconds > 0}
               >
                 <span aria-hidden="true">📷</span>
-                {s.take_photo}
+                {cooldownSeconds > 0 ? `Busy, try again in ${cooldownSeconds}s` : s.take_photo}
               </button>
 
               <div className="or-divider" aria-hidden="true">
@@ -252,7 +307,7 @@ export default function DrawScreen() {
                   <div className="samples-grid">
                     <button
                       className="sample-card"
-                      onClick={() => void handleSelectSample(sample1Png, 'sample1_series')}
+                      onClick={() => handleSelectSample('sample1_series')}
                     >
                       <img src={sample1Png} alt={s.sample_series} className="sample-thumb" />
                       <span className="sample-card-title">{s.sample_series}</span>
@@ -260,7 +315,7 @@ export default function DrawScreen() {
 
                     <button
                       className="sample-card"
-                      onClick={() => void handleSelectSample(sample2Png, 'sample2_parallel')}
+                      onClick={() => handleSelectSample('sample2_parallel')}
                     >
                       <img src={sample2Png} alt={s.sample_parallel} className="sample-thumb" />
                       <span className="sample-card-title">{s.sample_parallel}</span>
@@ -268,7 +323,7 @@ export default function DrawScreen() {
 
                     <button
                       className="sample-card"
-                      onClick={() => void handleSelectSample(sample3Png, 'sample3_resistor')}
+                      onClick={() => handleSelectSample('sample3_resistor')}
                     >
                       <img src={sample3Png} alt={s.sample_resistor} className="sample-thumb" />
                       <span className="sample-card-title">{s.sample_resistor}</span>
@@ -312,7 +367,7 @@ export default function DrawScreen() {
 
           {phase.kind === 'error' && (
             <ErrorView
-              message={phase.message}
+              message={cooldownSeconds > 0 ? `Busy, try again in ${cooldownSeconds}s` : phase.message}
               blurry={phase.blurry}
               previewUrl={phase.previewUrl}
               strings={s}

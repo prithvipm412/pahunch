@@ -1,15 +1,26 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
-import { enqueue, queueSize, drainQueue } from './offlineQueue'
+import {
+  enqueue,
+  queueSize,
+  drainQueue,
+  resetSessionRateLimit,
+} from './offlineQueue'
 import { scanCircuit, ERROR_MESSAGES } from './scanApi'
+import { hashBase64, getCachedScan, setCachedScan, clearScanCache } from './scanCache'
 import drawI18n from '../../content/i18n/draw.json'
 import learnI18n from '../../content/i18n/learn.json'
-import type { ComponentType } from '../contracts/netlist'
+import type { ComponentType, Netlist } from '../contracts/netlist'
+import { solve } from '../physics'
+import sample1Json from './samples/sample1.json'
+import sample2Json from './samples/sample2.json'
+import sample3Json from './samples/sample3.json'
 import {
   stripDataUrlPrefix,
   normalizeAndValidateMimeType,
   isPayloadTooLarge,
   validateNetlist,
   extractJsonFromText,
+  extractRetryDelaySeconds,
   DEMO_NETLIST,
   default as scanHandler,
 } from '../../api/scan.ts'
@@ -48,41 +59,162 @@ describe('Draw mode tap-to-fix type cycling', () => {
   })
 })
 
-describe('Draw mode offline queue', () => {
-  beforeEach(() => {
-    localStorage.clear()
+describe('Pre-baked sample circuits (offline, zero-API)', () => {
+  it('sample1 (2 bulbs in series) solves cleanly without errors', () => {
+    const netlist = sample1Json as Netlist
+    expect(netlist.gridSize).toBe(5)
+    expect(netlist.source).toBe('draw')
+    const result = solve(netlist)
+    expect(result.ok).toBe(true)
+    expect(result.errors).toEqual([])
+    expect(result.components.find((c) => c.id === 'bulb1')?.state).not.toBe('off')
+    expect(result.components.find((c) => c.id === 'bulb2')?.state).not.toBe('off')
   })
 
-  it('queues images up to a maximum of 5 entries', () => {
+  it('sample2 (2 bulbs in parallel) solves cleanly without errors', () => {
+    const netlist = sample2Json as Netlist
+    expect(netlist.gridSize).toBe(5)
+    expect(netlist.source).toBe('draw')
+    const result = solve(netlist)
+    expect(result.ok).toBe(true)
+    expect(result.errors).toEqual([])
+    expect(result.components.find((c) => c.id === 'bulb1')?.state).not.toBe('off')
+    expect(result.components.find((c) => c.id === 'bulb2')?.state).not.toBe('off')
+  })
+
+  it('sample3 (bulb + resistor) solves cleanly without errors', () => {
+    const netlist = sample3Json as Netlist
+    expect(netlist.gridSize).toBe(5)
+    expect(netlist.source).toBe('draw')
+    const result = solve(netlist)
+    expect(result.ok).toBe(true)
+    expect(result.errors).toEqual([])
+    const bulb = result.components.find((c) => c.id === 'bulb1')
+    expect(bulb?.state).not.toBe('off')
+  })
+})
+
+describe('Scan Cache (localStorage keyed by image hash)', () => {
+  beforeEach(() => {
+    clearScanCache()
+  })
+
+  it('hashBase64 produces deterministic hashes', () => {
+    const h1 = hashBase64('image-data-abc')
+    const h2 = hashBase64('image-data-abc')
+    const h3 = hashBase64('image-data-xyz')
+    expect(h1).toBe(h2)
+    expect(h1).not.toBe(h3)
+  })
+
+  it('stores and retrieves scan results', () => {
+    const hash = hashBase64('base64-payload-1')
+    expect(getCachedScan(hash)).toBeNull()
+
+    const netlist: Netlist = { gridSize: 5, source: 'draw', components: [] }
+    setCachedScan(hash, { netlist, confidence: 0.95, isDemo: false })
+
+    const cached = getCachedScan(hash)
+    expect(cached).not.toBeNull()
+    expect(cached?.hash).toBe(hash)
+    expect(cached?.netlist).toEqual(netlist)
+    expect(cached?.confidence).toBe(0.95)
+  })
+
+  it('caps cache at 10 items, dropping oldest on 11th', () => {
+    for (let i = 1; i <= 12; i++) {
+      const hash = hashBase64(`img-${i}`)
+      setCachedScan(hash, {
+        netlist: { gridSize: 5, source: 'draw', components: [] },
+        confidence: 1.0,
+        isDemo: false,
+      })
+    }
+    // Items 1 and 2 should have been evicted
+    expect(getCachedScan(hashBase64('img-1'))).toBeNull()
+    expect(getCachedScan(hashBase64('img-2'))).toBeNull()
+    // Items 3..12 should remain
+    expect(getCachedScan(hashBase64('img-3'))).not.toBeNull()
+    expect(getCachedScan(hashBase64('img-12'))).not.toBeNull()
+  })
+})
+
+describe('Draw mode offline queue with dedupe and throttling', () => {
+  beforeEach(() => {
+    localStorage.clear()
+    resetSessionRateLimit()
+  })
+
+  it('caps queue at 3 entries, dropping oldest', () => {
     expect(queueSize()).toBe(0)
     enqueue('img1')
     enqueue('img2')
     enqueue('img3')
-    enqueue('img4')
-    enqueue('img5')
-    expect(queueSize()).toBe(5)
+    expect(queueSize()).toBe(3)
 
-    // 6th entry drops oldest
-    enqueue('img6')
-    expect(queueSize()).toBe(5)
+    // 4th entry drops oldest (img1)
+    enqueue('img4')
+    expect(queueSize()).toBe(3)
   })
 
-  it('drains successfully sent items from the queue', async () => {
-    enqueue('img1')
-    enqueue('img2')
-    enqueue('img3')
+  it('dedupes identical images using base64 hash', () => {
+    enqueue('identical-data')
+    expect(queueSize()).toBe(1)
+    enqueue('identical-data')
+    expect(queueSize()).toBe(1)
 
-    const sent = await drainQueue(async (base64) => {
-      // simulate success for all except img2
-      return base64 !== 'img2'
-    })
+    enqueue('different-data')
+    expect(queueSize()).toBe(2)
+  })
+
+  it('replays items reporting progress "Sending saved circuit X of N"', async () => {
+    enqueue('itemA')
+    enqueue('itemB')
+
+    const progressLog: Array<{ current: number; total: number }> = []
+
+    const sent = await drainQueue(
+      async () => ({ ok: true, rateLimited: false }),
+      (p) => progressLog.push(p),
+      1, // 1ms delay for tests
+    )
 
     expect(sent).toBe(2)
-    expect(queueSize()).toBe(1)
+    expect(queueSize()).toBe(0)
+    expect(progressLog).toEqual([
+      { current: 1, total: 2 },
+      { current: 2, total: 2 },
+    ])
+  })
+
+  it('stops replaying immediately when a 429 rate limit is encountered', async () => {
+    enqueue('item1')
+    enqueue('item2')
+    enqueue('item3')
+
+    const sent = await drainQueue(
+      async (b64) => {
+        if (b64 === 'item1') {
+          // rate limit hit on first item
+          return { ok: false, rateLimited: true }
+        }
+        return { ok: true, rateLimited: false }
+      },
+      undefined,
+      1,
+    )
+
+    // Stop replaying immediately: 0 sent, all 3 retained in queue
+    expect(sent).toBe(0)
+    expect(queueSize()).toBe(3)
+
+    // Subsequent drains in this session should be stopped
+    const retrySent = await drainQueue(async () => ({ ok: true, rateLimited: false }), undefined, 1)
+    expect(retrySent).toBe(0)
   })
 })
 
-describe('Draw mode friendly error mapping', () => {
+describe('Draw mode friendly error mapping and 429 countdown', () => {
   const originalFetch = globalThis.fetch
 
   afterEach(() => {
@@ -101,20 +233,20 @@ describe('Draw mode friendly error mapping', () => {
     }
   })
 
-  it('maps 429 rate limit to friendly wait message', async () => {
+  it('maps 429 rate limit to friendly wait message with retryAfterSeconds', async () => {
     globalThis.fetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 429,
-      json: async () => ({ error: 'Quota exceeded for model' }),
+      headers: new Headers({ 'Retry-After': '25' }),
+      json: async () => ({ error: 'Quota exceeded for model', retryAfterSeconds: 25 }),
     } as Response)
 
     const result = await scanCircuit('fake-base64')
     expect(result.ok).toBe(false)
     if (!result.ok) {
       expect(result.reason).toBe('rate_limit')
-      expect(result.message).toBe(ERROR_MESSAGES.rateLimit)
-      expect(result.message).toBe('Too many scans, wait a minute and try again.')
-      expect(result.message).not.toContain('Quota exceeded')
+      expect(result.retryAfterSeconds).toBe(25)
+      expect(result.message).toBe('Busy, try again in 25s')
     }
   })
 
@@ -133,6 +265,38 @@ describe('Draw mode friendly error mapping', () => {
       expect(result.message).toBe("Couldn't read the circuit right now. Try a sample drawing or Build mode.")
       expect(result.message).not.toContain('bad json syntax')
     }
+  })
+})
+
+describe('api/scan retryDelay extraction', () => {
+  it('extracts numeric retryDelay', () => {
+    expect(extractRetryDelaySeconds({ retryDelay: 24 })).toBe(24)
+    expect(extractRetryDelaySeconds({ retryDelay: 15.2 })).toBe(16)
+  })
+
+  it('extracts string retryDelay', () => {
+    expect(extractRetryDelaySeconds({ retryDelay: '30s' })).toBe(30)
+  })
+
+  it('extracts retryDelay from Google RPC details', () => {
+    const err = {
+      details: [
+        {
+          '@type': 'type.googleapis.com/google.rpc.RetryInfo',
+          retryDelay: '18s',
+        },
+      ],
+    }
+    expect(extractRetryDelaySeconds(err)).toBe(18)
+  })
+
+  it('extracts retry delay from error message regex', () => {
+    expect(extractRetryDelaySeconds(new Error('Resource exhausted, retry after 22s'))).toBe(22)
+    expect(extractRetryDelaySeconds(new Error('Quota exceeded. retryDelay: "28s"'))).toBe(28)
+  })
+
+  it('returns undefined when no delay is present', () => {
+    expect(extractRetryDelaySeconds(new Error('Generic failure'))).toBeUndefined()
   })
 })
 
@@ -212,11 +376,9 @@ describe('api/scan Netlist validation', () => {
         { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 9 },
         { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
         { id: 'sw1', type: 'switch', from: { row: 0, col: 2 }, to: { row: 1, col: 2 }, closed: true },
-        { id: 'w1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 0, col: 0 } }, // wait: (1,2) to (0,0) not adjacent!
+        { id: 'w1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 1, col: 1 } },
       ],
     }
-    // Fix last component so it is adjacent:
-    valid.components[3] = { id: 'w1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 1, col: 1 } }
     const result = validateNetlist(valid)
     expect(result.ok).toBe(true)
     if (result.ok) {
@@ -225,49 +387,6 @@ describe('api/scan Netlist validation', () => {
       expect(result.netlist.components.length).toBe(4)
       expect(result.netlist.confidence).toBe(0.95)
     }
-  })
-
-  it('rejects invalid top-level shape or missing components array', () => {
-    expect(validateNetlist(null).ok).toBe(false)
-    expect(validateNetlist('not a netlist').ok).toBe(false)
-    expect(validateNetlist([]).ok).toBe(false)
-    expect(validateNetlist({ gridSize: 5 }).ok).toBe(false)
-  })
-
-  it('rejects unknown component types', () => {
-    const input = {
-      components: [
-        { id: 'x1', type: 'inductor', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
-      ],
-    }
-    const result = validateNetlist(input)
-    expect(result.ok).toBe(false)
-    if (!result.ok) {
-      expect(result.error).toContain('unknown type: inductor')
-    }
-  })
-
-  it('rejects components with invalid or out-of-bounds coordinates', () => {
-    // row out of 0..4
-    expect(
-      validateNetlist({
-        components: [{ id: 'b1', type: 'battery', from: { row: 5, col: 0 }, to: { row: 4, col: 0 } }],
-      }).ok,
-    ).toBe(false)
-
-    // negative row
-    expect(
-      validateNetlist({
-        components: [{ id: 'b1', type: 'battery', from: { row: -1, col: 0 }, to: { row: 0, col: 0 } }],
-      }).ok,
-    ).toBe(false)
-
-    // non-integer float row
-    expect(
-      validateNetlist({
-        components: [{ id: 'b1', type: 'battery', from: { row: 1.5, col: 0 }, to: { row: 2.5, col: 0 } }],
-      }).ok,
-    ).toBe(false)
   })
 
   it('normalizes and splits a long straight wire into unit segments with unique IDs', () => {
@@ -299,7 +418,6 @@ describe('api/scan Netlist validation', () => {
         from: { row: 0, col: 2 },
         to: { row: 0, col: 3 },
       })
-      // Unique IDs
       const ids = new Set(result.netlist.components.map((c) => c.id))
       expect(ids.size).toBe(3)
     }
@@ -351,8 +469,6 @@ describe('api/scan Netlist validation', () => {
     const result = validateNetlist(input)
     expect(result.ok).toBe(true)
     if (result.ok) {
-      // bat1 split into battery + 1 wire
-      // bulb1 split into bulb + 1 wire
       expect(result.netlist.components.length).toBe(4)
 
       expect(result.netlist.components[0]).toEqual({
@@ -405,6 +521,49 @@ describe('api/scan Netlist validation', () => {
     if (!sameResult.ok) {
       expect(sameResult.error).toContain('zero length')
     }
+  })
+
+  it('rejects invalid top-level shape or missing components array', () => {
+    expect(validateNetlist(null).ok).toBe(false)
+    expect(validateNetlist('not a netlist').ok).toBe(false)
+    expect(validateNetlist([]).ok).toBe(false)
+    expect(validateNetlist({ gridSize: 5 }).ok).toBe(false)
+  })
+
+  it('rejects unknown component types', () => {
+    const input = {
+      components: [
+        { id: 'x1', type: 'inductor', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
+      ],
+    }
+    const result = validateNetlist(input)
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.error).toContain('unknown type: inductor')
+    }
+  })
+
+  it('rejects components with invalid or out-of-bounds coordinates', () => {
+    // row out of 0..4
+    expect(
+      validateNetlist({
+        components: [{ id: 'b1', type: 'battery', from: { row: 5, col: 0 }, to: { row: 4, col: 0 } }],
+      }).ok,
+    ).toBe(false)
+
+    // negative row
+    expect(
+      validateNetlist({
+        components: [{ id: 'b1', type: 'battery', from: { row: -1, col: 0 }, to: { row: 0, col: 0 } }],
+      }).ok,
+    ).toBe(false)
+
+    // non-integer float row
+    expect(
+      validateNetlist({
+        components: [{ id: 'b1', type: 'battery', from: { row: 1.5, col: 0 }, to: { row: 2.5, col: 0 } }],
+      }).ok,
+    ).toBe(false)
   })
 })
 

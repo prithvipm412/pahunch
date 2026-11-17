@@ -1,0 +1,23 @@
+{
+  "gridSize": 5,
+  "source": "draw",
+  "confidence": 1.0,
+  "components": [
+    { "id": "bat1", "type": "battery", "from": { "row": 2, "col": 0 }, "to": { "row": 1, "col": 0 }, "value": 9 },
+    { "id": "w1", "type": "wire", "from": { "row": 1, "col": 0 }, "to": { "row": 0, "col": 0 } },
+    { "id": "w2", "type": "wire", "from": { "row": 0, "col": 0 }, "to": { "row": 0, "col": 1 } },
+    { "id": "sw1", "type": "switch", "from": { "row": 0, "col": 1 }, "to": { "row": 0, "col": 2 }, "closed": true },
+    { "id": "bulb1", "type": "bulb", "from": { "row": 0, "col": 2 }, "to": { "row": 0, "col": 3 } },
+    { "id": "w3", "type": "wire", "from": { "row": 0, "col": 3 }, "to": { "row": 0, "col": 4 } },
+    { "id": "w4", "type": "wire", "from": { "row": 0, "col": 4 }, "to": { "row": 1, "col": 4 } },
+    { "id": "bulb2", "type": "bulb", "from": { "row": 1, "col": 4 }, "to": { "row": 2, "col": 4 } },
+    { "id": "w5", "type": "wire", "from": { "row": 2, "col": 4 }, "to": { "row": 3, "col": 4 } },
+    { "id": "w6", "type": "wire", "from": { "row": 3, "col": 4 }, "to": { "row": 4, "col": 4 } },
+    { "id": "w7", "type": "wire", "from": { "row": 4, "col": 4 }, "to": { "row": 4, "col": 3 } },
+    { "id": "w8", "type": "wire", "from": { "row": 4, "col": 3 }, "to": { "row": 4, "col": 2 } },
+    { "id": "w9", "type": "wire", "from": { "row": 4, "col": 2 }, "to": { "row": 4, "col": 1 } },
+    { "id": "w10", "type": "wire", "from": { "row": 4, "col": 1 }, "to": { "row": 4, "col": 0 } },
+    { "id": "w11", "type": "wire", "from": { "row": 4, "col": 0 }, "to": { "row": 3, "col": 0 } },
+    { "id": "w12", "type": "wire", "from": { "row": 3, "col": 0 }, "to": { "row": 2, "col": 0 } }
+  ]
+}

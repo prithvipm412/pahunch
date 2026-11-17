@@ -92,7 +92,6 @@ export function normalizeAndValidateMimeType(
 
 /** Rejects payload exceeding 4MB */
 export function isPayloadTooLarge(cleanBase64: string): boolean {
-  // If base64 length exceeds 4MB or approx binary size exceeds 4MB
   const decodedBytes = Math.ceil((cleanBase64.length * 3) / 4)
   return cleanBase64.length > MAX_PAYLOAD_BYTES || decodedBytes > MAX_PAYLOAD_BYTES
 }
@@ -119,8 +118,6 @@ function isValidGridPoint(pt: unknown): pt is GridPoint {
     p.col <= 4
   )
 }
-
-
 
 /**
  * Validates and normalizes parsed JSON to match the Netlist shape:
@@ -304,12 +301,10 @@ export function extractJsonFromText(rawText?: string | null): unknown {
   }
 
   let cleaned = rawText.trim()
-  // Look for ```json ... ``` or ``` ... ```
   const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)\s*```/i)
   if (fenceMatch) {
     cleaned = fenceMatch[1].trim()
   } else {
-    // Strip leading ``` or trailing ``` if only partial
     cleaned = cleaned.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim()
     const firstBrace = cleaned.indexOf('{')
     const lastBrace = cleaned.lastIndexOf('}')
@@ -370,21 +365,83 @@ Re-examine the image carefully with this error in mind and correct the netlist.`
   return base
 }
 
-function isSchemaUnsupportedError(err: unknown): boolean {
+export function isSchemaUnsupportedError(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err)
   return /response[_-]?schema|response[_-]?mime[_-]?type|unsupported/i.test(msg)
 }
 
-function isRateLimitOr5xx(err: unknown): boolean {
+export function is429(err: unknown): boolean {
   if (!err) return false
   const status =
     (err as { status?: number; statusCode?: number }).status ??
     (err as { statusCode?: number }).statusCode
-  if (typeof status === 'number') {
-    if (status === 429 || (status >= 500 && status < 600)) return true
-  }
+  if (status === 429) return true
   const msg = err instanceof Error ? err.message : String(err)
-  return /429|500|502|503|504|resource_exhausted|quota|internal|unavailable|overloaded/i.test(msg)
+  return /429|resource_exhausted|quota/i.test(msg)
+}
+
+export function is5xx(err: unknown): boolean {
+  if (!err) return false
+  const status =
+    (err as { status?: number; statusCode?: number }).status ??
+    (err as { statusCode?: number }).statusCode
+  if (typeof status === 'number' && status >= 500 && status < 600) return true
+  const msg = err instanceof Error ? err.message : String(err)
+  return /500|502|503|504|internal|unavailable|overloaded/i.test(msg)
+}
+
+/** Extracts retry delay in seconds from error details or error message */
+export function extractRetryDelaySeconds(err: unknown): number | undefined {
+  if (!err) return undefined
+  const e = err as Record<string, unknown>
+
+  if (typeof e.retryDelay === 'number' && e.retryDelay > 0) {
+    return Math.ceil(e.retryDelay)
+  }
+  if (typeof e.retryDelay === 'string') {
+    const m = e.retryDelay.match(/(\d+(?:\.\d+)?)/)
+    if (m) return Math.ceil(parseFloat(m[1]))
+  }
+
+  const details = e.errorDetails ?? e.details ?? (e.error as Record<string, unknown> | undefined)?.details
+  if (Array.isArray(details)) {
+    for (const d of details) {
+      if (d && typeof d === 'object') {
+        const item = d as Record<string, unknown>
+        if (
+          (typeof item['@type'] === 'string' && item['@type'].includes('RetryInfo')) ||
+          item.retryDelay
+        ) {
+          if (typeof item.retryDelay === 'number' && item.retryDelay > 0) {
+            return Math.ceil(item.retryDelay)
+          }
+          if (typeof item.retryDelay === 'string') {
+            const m = item.retryDelay.match(/(\d+(?:\.\d+)?)/)
+            if (m) return Math.ceil(parseFloat(m[1]))
+          }
+          if (
+            item.retryDelay &&
+            typeof item.retryDelay === 'object' &&
+            typeof (item.retryDelay as Record<string, unknown>).seconds === 'number'
+          ) {
+            return Math.ceil((item.retryDelay as Record<string, unknown>).seconds as number)
+          }
+        }
+      }
+    }
+  }
+
+  const msg = err instanceof Error ? err.message : String(err)
+  const match =
+    msg.match(/retry\s*(?:after|in)?\s*[:]?\s*(\d+(?:\.\d+)?)\s*s/i) ||
+    msg.match(/retryDelay["']?\s*:\s*["']?(\d+(?:\.\d+)?)s/i) ||
+    msg.match(/retry after (\d+)/i)
+  if (match) {
+    const sec = parseFloat(match[1])
+    if (!isNaN(sec) && sec > 0) return Math.ceil(sec)
+  }
+
+  return undefined
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -424,7 +481,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mimeType = mimeCheck.mimeType
 
   const hint = typeof body.hint === 'string' ? body.hint : undefined
-  const model = process.env.GEMINI_MODEL ?? 'gemini-3.8-flash'
+  const primaryModel = process.env.GEMINI_MODEL ?? 'gemini-3.8-flash'
+  const fallbackModel = process.env.GEMINI_FALLBACK_MODEL
 
   const promptText = buildPrompt(hint)
   const ai = new GoogleGenAI({ apiKey })
@@ -444,67 +502,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     },
   ]
 
-  let text: string | undefined
-
-  try {
-    // Attempt 1: with structured schema
+  async function generateWithModel(targetModel: string): Promise<string> {
     try {
       const result = await ai.models.generateContent({
-        model,
+        model: targetModel,
         contents,
         config: {
           responseMimeType: 'application/json',
           responseSchema: NETLIST_SCHEMA,
         },
       })
-      text = result.text ?? ''
-    } catch (firstErr: unknown) {
-      if (isSchemaUnsupportedError(firstErr)) {
-        // Fallback: retry once WITHOUT responseSchema (asking for JSON in prompt)
-        try {
-          const fallbackResult = await ai.models.generateContent({
-            model,
-            contents,
-          })
-          text = fallbackResult.text ?? ''
-        } catch (fbErr: unknown) {
-          if (isRateLimitOr5xx(fbErr)) {
-            await new Promise((r) => setTimeout(r, 1500))
-            const retryResult = await ai.models.generateContent({
-              model,
-              contents,
-            })
-            text = retryResult.text ?? ''
-          } else {
-            throw fbErr
-          }
-        }
-      } else if (isRateLimitOr5xx(firstErr)) {
-        // Wait 1.5s and retry once
+      return result.text ?? ''
+    } catch (err: unknown) {
+      if (isSchemaUnsupportedError(err)) {
+        // Fallback without schema once
+        const fallbackResult = await ai.models.generateContent({
+          model: targetModel,
+          contents,
+        })
+        return fallbackResult.text ?? ''
+      }
+      throw err
+    }
+  }
+
+  let text: string | undefined
+
+  try {
+    try {
+      text = await generateWithModel(primaryModel)
+    } catch (primaryErr: unknown) {
+      // 5xx retry: wait 1.5s and retry once
+      if (is5xx(primaryErr)) {
         await new Promise((r) => setTimeout(r, 1500))
-        try {
-          const retryResult = await ai.models.generateContent({
-            model,
-            contents,
-            config: {
-              responseMimeType: 'application/json',
-              responseSchema: NETLIST_SCHEMA,
-            },
-          })
-          text = retryResult.text ?? ''
-        } catch (retryErr: unknown) {
-          if (isSchemaUnsupportedError(retryErr)) {
-            const fallbackResult = await ai.models.generateContent({
-              model,
-              contents,
-            })
-            text = fallbackResult.text ?? ''
-          } else {
-            throw retryErr
-          }
+        text = await generateWithModel(primaryModel)
+      } else if (is429(primaryErr)) {
+        // 429 handling: if GEMINI_FALLBACK_MODEL is configured, try it once before giving up
+        if (fallbackModel && fallbackModel !== primaryModel) {
+          console.error(`Gemini 429 on ${primaryModel}, trying fallback model: ${fallbackModel}`)
+          text = await generateWithModel(fallbackModel)
+        } else {
+          // Do NOT retry on 429 more than once
+          throw primaryErr
         }
       } else {
-        throw firstErr
+        throw primaryErr
       }
     }
 
@@ -528,11 +570,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(validation.netlist)
   } catch (err: unknown) {
     const rawMsg = err instanceof Error ? err.message : String(err)
-    // Redact API key server-side before logging
     const sanitised = apiKey ? rawMsg.replaceAll(apiKey, '[REDACTED]') : rawMsg
     console.error('Gemini scan server error:', sanitised)
 
-    const isRateLimit = /429|resource_exhausted|quota/i.test(sanitised)
-    return res.status(isRateLimit ? 429 : 500).json({ error: sanitised })
+    if (is429(err)) {
+      const retryAfterSeconds = extractRetryDelaySeconds(err) ?? 30
+      res.setHeader('Retry-After', String(retryAfterSeconds))
+      return res.status(429).json({ error: sanitised, retryAfterSeconds })
+    }
+
+    return res.status(500).json({ error: sanitised })
   }
 }

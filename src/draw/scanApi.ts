@@ -3,7 +3,7 @@
  *
  * Friendly error mapping for students:
  *  - Network failure → "No network. Use Build mode for now."
- *  - 429 Rate limit → "Too many scans, wait a minute and try again."
+ *  - 429 Rate limit → "Busy, try again in Ns" / "Too many scans, wait a minute and try again."
  *  - Server / model error (or 422 unreadable) → "Couldn't read the circuit right now. Try a sample drawing or Build mode."
  *
  * Raw errors are logged to the console only and never displayed as raw JSON in the UI.
@@ -21,6 +21,7 @@ export interface ScanFailure {
   ok: false
   reason: 'network' | 'rate_limit' | 'server'
   message: string
+  retryAfterSeconds?: number
 }
 
 export type ScanResult = ScanSuccess | ScanFailure
@@ -57,20 +58,35 @@ export async function scanCircuit(
 
   if (!response.ok) {
     let rawError = `HTTP ${response.status}`
+    let retryAfterSeconds: number | undefined
     try {
-      const body = (await response.json()) as { error?: string }
+      const body = (await response.json()) as { error?: string; retryAfterSeconds?: number }
       if (body.error) rawError = body.error
+      if (typeof body.retryAfterSeconds === 'number' && body.retryAfterSeconds > 0) {
+        retryAfterSeconds = body.retryAfterSeconds
+      }
     } catch {
       // ignore parse failure
+    }
+
+    // Check Retry-After header if not in JSON body
+    if (retryAfterSeconds === undefined && response.headers?.get) {
+      const headerVal = response.headers.get('Retry-After')
+      if (headerVal) {
+        const sec = parseInt(headerVal, 10)
+        if (!isNaN(sec) && sec > 0) retryAfterSeconds = sec
+      }
     }
 
     console.error('Scan server/model raw error:', rawError)
 
     if (response.status === 429 || /429|resource_exhausted|quota/i.test(rawError)) {
+      const sec = retryAfterSeconds ?? 30
       return {
         ok: false,
         reason: 'rate_limit',
-        message: ERROR_MESSAGES.rateLimit,
+        message: `Busy, try again in ${sec}s`,
+        retryAfterSeconds: sec,
       }
     }
 

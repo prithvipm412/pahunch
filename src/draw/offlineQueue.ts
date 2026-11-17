@@ -3,20 +3,34 @@
  * the network is unavailable, then drain them when the browser comes online.
  *
  * Rules:
- *  - At most 5 entries kept (oldest dropped when full).
- *  - Each entry is a base64 JPEG string.
- *  - Callers supply a `sender` function (wrapping scanCircuit); the queue
- *    calls it one-by-one on drain.
- *  - All localStorage access is wrapped in try/catch (quota / private mode).
+ *  - Capped at 3 entries (drop oldest when full).
+ *  - Replay ONE scan at a time, at least 8s apart.
+ *  - Dedupe identical images using base64 hash.
+ *  - If any replay gets a 429, stop replaying and try again on the next app load.
+ *  - Show "Sending saved circuit 1 of N…".
  */
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { hashBase64 } from './scanCache'
 
 const STORAGE_KEY = 'pahunch-draw-queue'
-const MAX_ENTRIES = 5
+const MAX_ENTRIES = 3
 
 export interface QueueEntry {
   id: string
+  hash: string
   base64: string
   savedAt: number
+}
+
+// In-memory session flag: if a 429 is received during drain, stop replaying for this app load.
+let sessionRateLimited = false
+
+export function resetSessionRateLimit(): void {
+  sessionRateLimited = false
+}
+
+export function isSessionRateLimited(): boolean {
+  return sessionRateLimited
 }
 
 function readQueue(): QueueEntry[] {
@@ -44,40 +58,87 @@ export function queueSize(): number {
 
 /**
  * Enqueue a compressed image for later retry.
+ * Dedupes by base64 hash, caps at 3 entries (dropping oldest).
  * Returns the new queue size, or -1 if storage is unavailable.
  */
 export function enqueue(base64: string): number {
+  const hash = hashBase64(base64)
   const entries = readQueue()
+  // Dedupe: remove any existing entry with the same hash or identical base64
+  const filtered = entries.filter((e) => e.hash !== hash && e.base64 !== base64)
   const entry: QueueEntry = {
     id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    hash,
     base64,
     savedAt: Date.now(),
   }
-  const next = [...entries, entry].slice(-MAX_ENTRIES) // keep newest MAX_ENTRIES
+  const next = [...filtered, entry].slice(-MAX_ENTRIES)
   writeQueue(next)
   return next.length
 }
 
+export type QueueSenderResult = { ok: boolean; rateLimited?: boolean } | boolean
+
+export interface DrainProgress {
+  current: number
+  total: number
+}
+
 /**
- * Drain the queue by calling `sender` for each entry.
- * Successfully sent entries are removed; failed ones are left in place.
- * Returns the number of entries successfully sent.
+ * Drain the queue by calling `sender` for each entry:
+ *  - Replays ONE scan at a time, at least 8s apart (delayMs configurable for tests).
+ *  - If sender returns 429 (rateLimited: true), stops replaying for this app load.
+ *  - Calls onProgress with (current, total) before each scan.
  */
 export async function drainQueue(
-  sender: (base64: string) => Promise<boolean>,
+  sender: (base64: string) => Promise<QueueSenderResult>,
+  onProgress?: (progress: DrainProgress) => void,
+  delayMs: number = 8000,
 ): Promise<number> {
+  if (sessionRateLimited) return 0
+
   const entries = readQueue()
   if (entries.length === 0) return 0
 
+  const total = entries.length
   let sent = 0
   const remaining: QueueEntry[] = []
 
-  for (const entry of entries) {
-    const ok = await sender(entry.base64)
-    if (ok) {
+  for (let i = 0; i < entries.length; i++) {
+    const entry = entries[i]
+
+    if (sessionRateLimited) {
+      remaining.push(entry)
+      continue
+    }
+
+    onProgress?.({ current: i + 1, total })
+
+    let result: QueueSenderResult
+    try {
+      result = await sender(entry.base64)
+    } catch {
+      result = false
+    }
+
+    const isOk = typeof result === 'boolean' ? result : result.ok
+    const isRateLimited = typeof result === 'object' && !!result.rateLimited
+
+    if (isRateLimited) {
+      sessionRateLimited = true
+      remaining.push(entry)
+      continue
+    }
+
+    if (isOk) {
       sent++
     } else {
       remaining.push(entry)
+    }
+
+    // Wait at least delayMs (default 8s) before next replay, if there are more items to send
+    if (i < entries.length - 1 && !sessionRateLimited) {
+      await new Promise((resolve) => setTimeout(resolve, delayMs))
     }
   }
 
@@ -85,26 +146,21 @@ export async function drainQueue(
   return sent
 }
 
-/**
- * React hook that:
- *  - Tracks the live queue size in state.
- *  - Listens for the browser `online` event and auto-drains.
- *  - Returns { size, enqueue, isDraining }.
- */
-import { useState, useEffect, useCallback, useRef } from 'react'
-
 export interface UseOfflineQueueReturn {
   size: number
   save: (base64: string) => void
   isDraining: boolean
+  progress: DrainProgress | null
 }
 
 export function useOfflineQueue(
-  sender: (base64: string) => Promise<boolean>,
+  sender: (base64: string) => Promise<QueueSenderResult>,
+  delayMs: number = 8000,
 ): UseOfflineQueueReturn {
   const [size, setSize] = useState(() => queueSize())
   const [isDraining, setIsDraining] = useState(false)
-  // Keep a stable ref to sender so the effect closure doesn't go stale.
+  const [progress, setProgress] = useState<DrainProgress | null>(null)
+
   const senderRef = useRef(sender)
   senderRef.current = sender
 
@@ -114,22 +170,26 @@ export function useOfflineQueue(
   }, [])
 
   const drain = useCallback(async () => {
-    if (queueSize() === 0) return
+    if (queueSize() === 0 || sessionRateLimited) return
     setIsDraining(true)
     try {
-      await drainQueue(senderRef.current)
+      await drainQueue(
+        senderRef.current,
+        (prog) => setProgress(prog),
+        delayMs,
+      )
     } finally {
       setSize(queueSize())
       setIsDraining(false)
+      setProgress(null)
     }
-  }, [])
+  }, [delayMs])
 
   useEffect(() => {
     window.addEventListener('online', drain)
-    // Attempt a drain immediately if we're already online (e.g. page refresh).
     if (navigator.onLine) void drain()
     return () => window.removeEventListener('online', drain)
   }, [drain])
 
-  return { size, save, isDraining }
+  return { size, save, isDraining, progress }
 }
