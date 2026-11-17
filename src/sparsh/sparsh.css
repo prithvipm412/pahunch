@@ -1,0 +1,165 @@
+.sparsh-screen {
+  position: fixed;
+  inset: 0;
+  background: #0b1b3f;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sparsh-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  flex: 0 0 auto;
+}
+
+.sparsh-topbar .back-link {
+  color: #c4d2ed;
+  text-decoration: none;
+  font-size: 18px;
+  padding: 10px;
+}
+
+.sparsh-topbar h1 {
+  margin: 0;
+  font-size: 18px;
+  letter-spacing: 0.04em;
+}
+
+.sparsh-mode-badge {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: #d7e3ff;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.sparsh-surface {
+  flex: 1 1 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.sparsh-grid {
+  position: relative;
+  width: min(92vw, 70vh, 480px);
+  height: min(92vw, 70vh, 480px);
+}
+
+.sparsh-grid svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.sparsh-dot {
+  fill: #3a4d7a;
+}
+
+.sparsh-dot.is-cursor {
+  fill: #ffffff;
+  stroke: #ff9f43;
+  stroke-width: 4;
+}
+
+.sparsh-dot.is-finger {
+  fill: #ff9f43;
+}
+
+.sparsh-wire {
+  stroke: #5c6f9e;
+  stroke-width: 6;
+  stroke-linecap: round;
+}
+
+.sparsh-part-line {
+  stroke-width: 10;
+  stroke-linecap: round;
+}
+
+.sparsh-part-line.type-battery {
+  stroke: #f2b134;
+}
+.sparsh-part-line.type-bulb {
+  stroke: #ffd166;
+}
+.sparsh-part-line.type-resistor {
+  stroke: #8ecae6;
+}
+.sparsh-part-line.type-switch.is-closed {
+  stroke: #52d17c;
+}
+.sparsh-part-line.type-switch:not(.is-closed) {
+  stroke: #e2576b;
+}
+.sparsh-part-line.type-wire {
+  stroke: #5c6f9e;
+}
+
+.sparsh-part-line.is-active {
+  stroke: #ffffff;
+  filter: drop-shadow(0 0 10px #ffffff);
+}
+
+.sparsh-part-badge {
+  fill: #0b1b3f;
+  stroke: #ffffff;
+  stroke-width: 2;
+}
+
+.sparsh-part-label {
+  fill: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.sparsh-caption {
+  flex: 0 0 auto;
+  min-height: 72px;
+  padding: 14px 20px calc(18px + env(safe-area-inset-bottom));
+  font-size: clamp(18px, 4.5vw, 24px);
+  font-weight: 700;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sparsh-unlock-overlay {
+  position: fixed;
+  inset: 0;
+  background: #0b1b3f;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px;
+  z-index: 10;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sparsh-unlock-overlay span {
+  font-size: clamp(26px, 7vw, 40px);
+  font-weight: 800;
+  max-width: 20ch;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sparsh-part-line.is-active {
+    filter: none;
+  }
+}
