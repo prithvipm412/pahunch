@@ -14,6 +14,7 @@ export interface CircuitSVGProps {
   netlist: Netlist
   solveResult?: SolveResult
   selectedId?: string | null
+  suspectWireIds?: string[]
   activeDot?: GridPoint | null
   interactive?: boolean
   onComponentTap?: (id: string) => void
@@ -60,6 +61,7 @@ interface CompDrawProps {
   r2: number
   c2: number
   isSelected?: boolean
+  isSuspect?: boolean
   glow?: string
 }
 
@@ -208,17 +210,27 @@ function Switch({
 }
 
 /** Render a wire (straight line). */
-function Wire({ r1, c1, r2, c2, isSelected }: CompDrawProps) {
+function Wire({ r1, c1, r2, c2, isSelected, isSuspect }: CompDrawProps) {
   const a = pt(r1, c1)
   const b = pt(r2, c2)
-  const stroke = isSelected ? '#FFD54F' : 'var(--clr-accent, #4FC3F7)'
-  return <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={stroke} strokeWidth={isSelected ? 4 : 2} />
+  const stroke = isSelected ? '#FFD54F' : isSuspect ? '#FF9800' : 'var(--clr-accent, #4FC3F7)'
+  return (
+    <line
+      x1={a.x}
+      y1={a.y}
+      x2={b.x}
+      y2={b.y}
+      stroke={stroke}
+      strokeWidth={isSelected ? 4 : isSuspect ? 4 : 2}
+    />
+  )
 }
 
 export default function CircuitSVG({
   netlist,
   solveResult,
   selectedId,
+  suspectWireIds,
   activeDot,
   interactive,
   onComponentTap,
@@ -273,7 +285,7 @@ export default function CircuitSVG({
       height={size}
       viewBox={`0 0 ${size} ${size}`}
       style={{
-        background: 'rgba(255,255,255,0.05)',
+        background: '#0f0f0f',
         borderRadius: '12px',
         maxWidth: '100%',
         touchAction: 'manipulation',
@@ -369,6 +381,7 @@ export default function CircuitSVG({
         const r2 = c.to.row
         const c2 = c.to.col
         const isSelected = selectedId === c.id
+        const isSuspect = Boolean(suspectWireIds?.includes(c.id))
         const state = bulbStateMap.get(c.id)
         const glow = bulbGlowColor(state)
         const a = pt(r1, c1)
@@ -380,6 +393,7 @@ export default function CircuitSVG({
           r2,
           c2,
           isSelected,
+          isSuspect,
           glow,
         }
 
@@ -415,6 +429,19 @@ export default function CircuitSVG({
             }}
             style={interactive ? { cursor: 'pointer' } : undefined}
           >
+            {/* Suspect wire orange halo */}
+            {isSuspect && !isSelected && (
+              <line
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke="#FF9800"
+                strokeWidth={14}
+                opacity={0.4}
+                strokeLinecap="round"
+              />
+            )}
             {/* Selection halo */}
             {isSelected && (
               <line

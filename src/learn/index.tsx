@@ -680,7 +680,7 @@ const STYLES = `
     display: flex;
     gap: 0;
     width: 100%;
-    background: rgba(15, 15, 15, 0.88);
+    background: #0f0f0f;
     border: 2px solid var(--clr-cream);
     border-radius: 999px;
     padding: 4px;
@@ -712,7 +712,7 @@ const STYLES = `
 
   .learn-content {
     width: 100%;
-    background: rgba(15, 15, 15, 0.88);
+    background: #0f0f0f;
     border: 2px solid var(--clr-cream);
     border-radius: 16px;
     padding: 18px;
@@ -747,8 +747,8 @@ const STYLES = `
   }
 
   .challenge-card {
-    background: var(--clr-surface);
-    border: 1px solid rgba(241,230,207,0.1);
+    background: #0f0f0f;
+    border: 1px solid rgba(241,230,207,0.15);
     border-radius: var(--radius);
     padding: 12px 8px 16px;
     cursor: pointer;
@@ -758,6 +758,7 @@ const STYLES = `
     gap: 8px;
     transition: background var(--transition), transform var(--transition);
     min-height: 120px;
+  }
   }
   .challenge-card:hover, .challenge-card:focus-visible {
     background: var(--clr-surface-hover);
@@ -788,7 +789,7 @@ const STYLES = `
   }
 
   .option-btn {
-    background: rgba(15, 15, 15, 0.88);
+    background: #0f0f0f;
     border: 2px solid var(--clr-cream);
     border-radius: var(--radius);
     color: var(--clr-cream);
@@ -839,7 +840,8 @@ const STYLES = `
   .wrong-text   { color: var(--clr-error);   font-weight: 700; }
 
   .explain-box {
-    background: var(--clr-surface);
+    background: #0f0f0f;
+    border: 1px solid rgba(241,230,207,0.15);
     border-radius: 12px;
     padding: 16px;
     margin-bottom: 20px;

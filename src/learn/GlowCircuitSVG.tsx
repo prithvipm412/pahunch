@@ -176,7 +176,7 @@ export default function GlowCircuitSVG({ netlist, solveResult, revealed, highlig
     <svg
       width={size} height={size}
       viewBox={`0 0 ${size} ${size}`}
-      style={{ background: 'rgba(255,255,255,0.05)', borderRadius: '12px', maxWidth: '100%' }}
+      style={{ background: '#0f0f0f', borderRadius: '12px', maxWidth: '100%' }}
       aria-label="Circuit diagram"
       role="img"
     >

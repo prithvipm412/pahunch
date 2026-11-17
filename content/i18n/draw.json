@@ -37,6 +37,7 @@
     "circuit_open": "Circuit is open. Connect wires to complete loop.",
     "circuit_short": "Short circuit! Dangerous path across battery.",
     "circuit_no_battery": "No battery found. Tap a part to make it a battery.",
+    "suspect_wire_msg": "Pahunch might have added this wire — tap it to remove",
     "or_divider": "or",
     "cancel": "Cancel"
   },
@@ -78,6 +79,7 @@
     "circuit_open": "ಸರ್ಕ್ಯೂಟ್ ತೆರೆದಿದೆ. ಲೂಪ್ ಪೂರ್ಣಗೊಳಿಸಲು ತಂತಿ ಜೋಡಿಸಿ.",
     "circuit_short": "ಷಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್! ಬ್ಯಾಟರಿ ಅಡ್ಡಲಾಗಿ ಅಪಾಯಕಾರಿ ಮಾರ್ಗ.",
     "circuit_no_battery": "ಬ್ಯಾಟರಿ ಇಲ್ಲ. ಭಾಗವನ್ನು ಬ್ಯಾಟರಿಯನ್ನಾಗಿ ಮಾಡಲು ತಟ್ಟಿ.",
+    "suspect_wire_msg": "ಪಾಹುಂಚ್ ಈ ತಂತಿಯನ್ನು ಸೇರಿಸಿರಬಹುದು — ತೆಗೆಯಲು ಅದನ್ನು ತಟ್ಟಿ",
     "or_divider": "ಅಥವಾ",
     "cancel": "ರದ್ದುಮಾಡಿ"
   }

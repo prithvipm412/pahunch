@@ -23,6 +23,7 @@ import { scanCircuit } from './scanApi'
 import CircuitSVG from './CircuitSVG'
 import { useDrawStrings } from './useDrawStrings'
 import { useOfflineQueue } from './offlineQueue'
+import { findInteriorWires, findSuspectWires, HINT_SHORT_OR_PHANTOM_WIRE } from './suspectWire'
 
 import sample1Png from './samples/sample1.png'
 import sample2Png from './samples/sample2.png'
@@ -170,13 +171,23 @@ export default function DrawScreen() {
         return
       }
 
-      // Self-correcting loop
+      // Self-correcting loop: check for short circuit or interior phantom wire
       const solveResult = solve(first.netlist)
       let finalNetlist = first.netlist
       let isDemo = first.isDemo
       let confidence = first.confidence
 
-      if (solveResult.errors.length > 0) {
+      const hasShort = solveResult.errors.includes('short_circuit')
+      const hasInteriorWire = findInteriorWires(first.netlist).length > 0
+
+      if (hasShort || hasInteriorWire) {
+        const second = await scanCircuit(base64, HINT_SHORT_OR_PHANTOM_WIRE)
+        if (second.ok) {
+          finalNetlist = second.netlist
+          isDemo = second.isDemo
+          confidence = second.confidence
+        }
+      } else if (solveResult.errors.length > 0) {
         const hint = solveResult.errors.join('; ')
         const second = await scanCircuit(base64, hint)
         if (second.ok) {
@@ -423,6 +434,9 @@ function ResultView({
 
   // Live physics check
   const solveResult = useMemo(() => solve(netlist), [netlist])
+  const suspectWires = useMemo(() => findSuspectWires(netlist, solveResult), [netlist, solveResult])
+  const suspectWireIds = useMemo(() => suspectWires.map((w) => w.id), [suspectWires])
+  const hasShort = solveResult.errors.includes('short_circuit')
 
   const typeIcons: Record<string, string> = {
     battery: '🔋',
@@ -531,6 +545,14 @@ function ResultView({
         <span className="solve-msg">{formatSolveMessage(solveResult, s)}</span>
       </div>
 
+      {/* Suspect wire short warning banner */}
+      {(hasShort || suspectWireIds.length > 0) && (
+        <div className="suspect-wire-banner" role="alert">
+          <span className="banner-icon" aria-hidden="true">⚠️</span>
+          <span className="suspect-wire-text">{s.suspect_wire_msg}</span>
+        </div>
+      )}
+
       <div className="result-row">
         <div className="result-panel">
           <span className="panel-label">{s.photo_label}</span>
@@ -542,9 +564,16 @@ function ResultView({
             netlist={netlist}
             solveResult={solveResult}
             selectedId={selectedId}
+            suspectWireIds={suspectWireIds}
             activeDot={activeDot}
             interactive={true}
-            onComponentTap={(id) => cycleComponent(id)}
+            onComponentTap={(id) => {
+              if (suspectWireIds.includes(id)) {
+                deleteComponent(id)
+              } else {
+                cycleComponent(id)
+              }
+            }}
             onDotTap={handleDotTap}
             onAddWire={addWire}
           />
@@ -789,7 +818,7 @@ const STYLES = `
     flex-direction: column;
     align-items: center;
     gap: 20px;
-    background: rgba(15, 15, 15, 0.88);
+    background: #0f0f0f;
     border: 2px solid var(--clr-cream);
     border-radius: 16px;
     padding: 20px;
@@ -858,7 +887,7 @@ const STYLES = `
   .sample-btn:active { transform: translateY(2px); box-shadow: none; }
 
   .samples-container {
-    background: rgba(241, 230, 207, 0.06);
+    background: #0f0f0f;
     border: 1px solid rgba(241, 230, 207, 0.15);
     border-radius: var(--radius);
     padding: 16px;
@@ -922,7 +951,7 @@ const STYLES = `
   }
 
   .status-box {
-    background: var(--clr-surface);
+    background: #0f0f0f;
     border-radius: var(--radius);
     padding: 32px 24px;
     text-align: center;
@@ -951,7 +980,7 @@ const STYLES = `
     border-radius: var(--radius);
     object-fit: contain;
     max-height: 240px;
-    background: rgba(0,0,0,0.3);
+    background: #0f0f0f;
   }
 
   .result-row {
@@ -968,6 +997,11 @@ const STYLES = `
     flex-direction: column;
     align-items: center;
     gap: 8px;
+    background: #0f0f0f;
+    border: 1px solid rgba(241, 230, 207, 0.15);
+    border-radius: var(--radius);
+    padding: 12px;
+    box-sizing: border-box;
   }
 
   .panel-label {
@@ -975,6 +1009,25 @@ const STYLES = `
     text-transform: uppercase;
     letter-spacing: 0.08em;
     color: rgba(241,230,207,0.5);
+  }
+
+  /* Suspect wire short warning banner */
+  .suspect-wire-banner {
+    background: rgba(255, 152, 0, 0.15);
+    border: 2px solid #FF9800;
+    border-radius: 12px;
+    padding: 12px 16px;
+    width: 100%;
+    box-sizing: border-box;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: #FFB74D;
+    font-weight: 600;
+    font-size: 0.95rem;
+  }
+  .suspect-wire-text {
+    flex: 1;
   }
 
   /* Confidence banner */

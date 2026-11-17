@@ -70,6 +70,25 @@ export type AllowedMimeType = (typeof ALLOWED_MIME_TYPES)[number]
 
 export const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024 // 4 MB
 
+export const BATTERY_PRESETS = [1.5, 3, 4.5, 6, 9] as const
+export const RESISTOR_PRESETS = [5, 10, 20, 50, 100] as const
+export const DEFAULT_BATTERY_VOLTAGE = 3
+export const DEFAULT_RESISTOR_OHMS = 10
+
+/** Snaps a numeric value to the nearest preset in a list of numbers */
+export function snapToPreset(val: number, presets: readonly number[]): number {
+  let closest = presets[0]
+  let minDiff = Math.abs(val - closest)
+  for (let i = 1; i < presets.length; i++) {
+    const diff = Math.abs(val - presets[i])
+    if (diff < minDiff) {
+      minDiff = diff
+      closest = presets[i]
+    }
+  }
+  return closest
+}
+
 /** Defensively strips data URL scheme prefix (e.g. "data:image/jpeg;base64,") */
 export function stripDataUrlPrefix(image: string): string {
   return image.trim().replace(/^data:[^;]+;base64,/i, '').trim()
@@ -163,6 +182,22 @@ export function validateNetlist(
     return candidate
   }
 
+  function sanitizeComponentValues(comp: CircuitComponent, raw: Record<string, unknown>) {
+    if (comp.type === 'battery') {
+      comp.value =
+        typeof raw.value === 'number' && !isNaN(raw.value) && raw.value > 0
+          ? snapToPreset(raw.value, BATTERY_PRESETS)
+          : DEFAULT_BATTERY_VOLTAGE
+    } else if (comp.type === 'resistor') {
+      comp.value =
+        typeof raw.value === 'number' && !isNaN(raw.value) && raw.value > 0
+          ? snapToPreset(raw.value, RESISTOR_PRESETS)
+          : DEFAULT_RESISTOR_OHMS
+    } else if (comp.type === 'switch') {
+      comp.closed = typeof raw.closed === 'boolean' ? raw.closed : true
+    }
+  }
+
   for (let i = 0; i < obj.components.length; i++) {
     const raw = obj.components[i]
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -220,8 +255,7 @@ export function validateNetlist(
         from: { row: c.from.row, col: c.from.col },
         to: { row: c.to.row, col: c.to.col },
       }
-      if (typeof c.value === 'number' && !isNaN(c.value)) comp.value = c.value
-      if (typeof c.closed === 'boolean') comp.closed = c.closed
+      sanitizeComponentValues(comp, c)
       validatedComponents.push(comp)
     } else {
       // Multi-dot span: split into unit segments
@@ -262,8 +296,7 @@ export function validateNetlist(
               from: segFrom,
               to: segTo,
             }
-            if (typeof c.value === 'number' && !isNaN(c.value)) comp.value = c.value
-            if (typeof c.closed === 'boolean') comp.closed = c.closed
+            sanitizeComponentValues(comp, c)
             validatedComponents.push(comp)
           } else {
             const wireId = getUniqueId(`${rawId}_wire_${k}`)
@@ -324,22 +357,25 @@ Read the hand-drawn DC circuit in this image using standard circuit schematic sy
 ### FEW-SHOT SYMBOL DESCRIPTIONS:
 1. Battery (DC voltage source):
    - Drawn as two or more parallel lines perpendicular to the wire: a long thin positive line and a shorter thicker negative line, or stacked cell pairs with + / - markings.
-   - Example component: { "id": "bat1", "type": "battery", "from": {"row": 0, "col": 0}, "to": {"row": 0, "col": 1}, "value": 9 }
+   - Read written voltage labels (e.g., '1.5V', '2V', '3V', '5V', '6V', '9V') into the 'value' field. Snap to nearest preset: 1.5, 3, 4.5, 6, 9 V. Default is 3 V if unlabelled.
+   - Example component: { "id": "bat1", "type": "battery", "from": {"row": 0, "col": 0}, "to": {"row": 0, "col": 1}, "value": 3 }
 
 2. Bulb / Lamp (resistive load that glows):
-   - Drawn as a circle with an 'X' inside, or a circle with a filament loop inside.
+   - Drawn as a circle with an 'X' inside, a circle with a filament loop inside, or a coil/loop symbol labelled "bulb" or "lamp".
    - Example component: { "id": "bulb1", "type": "bulb", "from": {"row": 0, "col": 1}, "to": {"row": 0, "col": 2} }
 
 3. Resistor (current limiter):
    - Drawn as a zigzag line (sharp peaks and valleys) or a clean rectangle along the wire.
+   - Read written resistance labels (e.g., '5Ω', '10Ω', '20Ω', '50Ω', '100Ω', '10 ohm') into the 'value' field. Snap to nearest preset: 5, 10, 20, 50, 100 Ω. Default is 10 Ω if unlabelled.
    - Example component: { "id": "res1", "type": "resistor", "from": {"row": 1, "col": 2}, "to": {"row": 1, "col": 3}, "value": 10 }
 
 4. Switch (circuit breaker / controller):
-   - Drawn as a gap in the wire with an angled lever/blade (open switch: closed = false), or a straight lever bridging two terminal dots (closed switch: closed = true).
+   - Drawn as a gap in the wire with an angled lever/blade, or a gap in a line. Default closed = true unless it is clearly drawn open (angled lever away from contact).
    - Example component: { "id": "sw1", "type": "switch", "from": {"row": 0, "col": 2}, "to": {"row": 0, "col": 3}, "closed": true }
 
 5. Wire (conductive path):
    - Drawn as plain straight lines connecting components or turning 90-degree corners.
+   - Only output wires for lines actually drawn. A simple rectangle loop has NO wires inside it. Do not invent connections. Most student drawings are ONE series loop.
    - Example component: { "id": "wire1", "type": "wire", "from": {"row": 0, "col": 3}, "to": {"row": 1, "col": 3} }
 
 ### CRITICAL JUNCTION & TOPOLOGY RULES:
@@ -348,7 +384,7 @@ Read the hand-drawn DC circuit in this image using standard circuit schematic sy
 - Junctions: Two components connect ONLY if they share the exact same grid point { row, col }.
 - Crossing lines without a dot do NOT connect: If two lines cross without a clear junction dot, they bridge over each other and do NOT share a grid point.
 - Closed loop: If a closed loop is drawn, ALWAYS return an unbroken closed loop of components and wires so the circuit path is electrically complete. Never leave accidental gaps or open ends if the drawing was intended as a closed circuit.
-- Do NOT invent components: Only include parts visibly present in the drawing.
+- Do NOT invent components or phantom wires: Only output wires for lines actually drawn. A simple rectangle loop has NO wires inside it. Do not invent connections. Most student drawings are ONE series loop.
 - Confidence score (0.0 to 1.0):
   - 0.85 - 1.0: Crystal clear drawing, unambiguous symbols, fully closed loop.
   - 0.60 - 0.84: Readable drawing with minor handwriting noise, slight tilt, or lightly drawn lines.
@@ -481,7 +517,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const mimeType = mimeCheck.mimeType
 
   const hint = typeof body.hint === 'string' ? body.hint : undefined
-  const primaryModel = process.env.GEMINI_MODEL ?? 'gemini-3.8-flash'
+  const primaryModel = process.env.GEMINI_MODEL ?? 'gemini-3.5-flash-lite'
   const fallbackModel = process.env.GEMINI_FALLBACK_MODEL
 
   const promptText = buildPrompt(hint)

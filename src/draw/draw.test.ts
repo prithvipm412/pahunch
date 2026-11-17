@@ -21,9 +21,19 @@ import {
   validateNetlist,
   extractJsonFromText,
   extractRetryDelaySeconds,
+  snapToPreset,
+  BATTERY_PRESETS,
+  RESISTOR_PRESETS,
+  DEFAULT_BATTERY_VOLTAGE,
+  DEFAULT_RESISTOR_OHMS,
   DEMO_NETLIST,
   default as scanHandler,
 } from '../../api/scan.ts'
+import {
+  findInteriorWires,
+  findSuspectWires,
+  HINT_SHORT_OR_PHANTOM_WIRE,
+} from './suspectWire'
 
 // In-memory mock for localStorage in Node/Vitest environment
 const store: Record<string, string> = {}
@@ -701,5 +711,164 @@ describe('api/scan handler HTTP flow', () => {
     } finally {
       delete process.env.GEMINI_API_KEY
     }
+  })
+})
+
+describe('Phantom wire and suspect wire detection', () => {
+  it('returns no interior wires for a standard series rectangle loop', () => {
+    const loop: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 2 }, value: 3 },
+        { id: 'res1', type: 'resistor', from: { row: 0, col: 2 }, to: { row: 0, col: 4 }, value: 10 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 4 }, to: { row: 4, col: 4 } },
+        { id: 'sw1', type: 'switch', from: { row: 4, col: 4 }, to: { row: 4, col: 2 }, closed: true },
+        { id: 'w1', type: 'wire', from: { row: 4, col: 2 }, to: { row: 4, col: 0 } },
+        { id: 'w2', type: 'wire', from: { row: 4, col: 0 }, to: { row: 0, col: 0 } },
+      ],
+    }
+
+    const interior = findInteriorWires(loop)
+    expect(interior).toEqual([])
+
+    const res = solve(loop)
+    expect(res.ok).toBe(true)
+    const suspect = findSuspectWires(loop, res)
+    expect(suspect).toEqual([])
+  })
+
+  it('detects a phantom vertical wire running through the middle of a series loop', () => {
+    const loopWithPhantomWire: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 2 }, value: 3 },
+        { id: 'res1', type: 'resistor', from: { row: 0, col: 2 }, to: { row: 0, col: 4 }, value: 10 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 4 }, to: { row: 4, col: 4 } },
+        { id: 'sw1', type: 'switch', from: { row: 4, col: 4 }, to: { row: 4, col: 2 }, closed: true },
+        { id: 'w1', type: 'wire', from: { row: 4, col: 2 }, to: { row: 4, col: 0 } },
+        { id: 'w2', type: 'wire', from: { row: 4, col: 0 }, to: { row: 0, col: 0 } },
+        // Phantom wire added by model down column 2
+        { id: 'wire_phantom', type: 'wire', from: { row: 0, col: 2 }, to: { row: 4, col: 2 } },
+      ],
+    }
+
+    const interior = findInteriorWires(loopWithPhantomWire)
+    expect(interior.map((w) => w.id)).toContain('wire_phantom')
+
+    // Physics solver should report short_circuit because battery is shorted through col 2
+    const res = solve(loopWithPhantomWire)
+    expect(res.errors).toContain('short_circuit')
+
+    // findSuspectWires identifies the phantom wire
+    const suspect = findSuspectWires(loopWithPhantomWire, res)
+    expect(suspect.map((s) => s.id)).toContain('wire_phantom')
+  })
+
+  it('detects a phantom horizontal wire running through the middle', () => {
+    const loopWithHorizPhantom: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 4 }, value: 3 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 4 }, to: { row: 4, col: 4 } },
+        { id: 'w1', type: 'wire', from: { row: 4, col: 4 }, to: { row: 4, col: 0 } },
+        { id: 'w2', type: 'wire', from: { row: 4, col: 0 }, to: { row: 0, col: 0 } },
+        // Phantom horizontal wire across row 2
+        { id: 'wire_h_phantom', type: 'wire', from: { row: 2, col: 0 }, to: { row: 2, col: 4 } },
+      ],
+    }
+
+    const interior = findInteriorWires(loopWithHorizPhantom)
+    expect(interior.map((w) => w.id)).toContain('wire_h_phantom')
+  })
+
+  it('identifies direct short-circuit wires across battery even without interior wires', () => {
+    const directShort: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'wire_short', type: 'wire', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
+      ],
+    }
+
+    const res = solve(directShort)
+    expect(res.errors).toContain('short_circuit')
+
+    const suspect = findSuspectWires(directShort, res)
+    expect(suspect.map((w) => w.id)).toContain('wire_short')
+  })
+
+  it('provides the exact self-correction hint string', () => {
+    expect(HINT_SHORT_OR_PHANTOM_WIRE).toBe(
+      'Your netlist has a wire that creates a short; check whether that wire is really drawn.',
+    )
+  })
+})
+
+describe('Component value reading, presets snapping, and defaults', () => {
+  it('snaps battery voltages to nearest preset (1.5, 3, 4.5, 6, 9 V)', () => {
+    expect(snapToPreset(1.4, BATTERY_PRESETS)).toBe(1.5)
+    expect(snapToPreset(2.0, BATTERY_PRESETS)).toBe(1.5)
+    expect(snapToPreset(3.2, BATTERY_PRESETS)).toBe(3)
+    expect(snapToPreset(5.0, BATTERY_PRESETS)).toBe(4.5)
+    expect(snapToPreset(5.8, BATTERY_PRESETS)).toBe(6)
+    expect(snapToPreset(8.5, BATTERY_PRESETS)).toBe(9)
+    expect(snapToPreset(12, BATTERY_PRESETS)).toBe(9)
+  })
+
+  it('snaps resistor resistances to nearest preset (5, 10, 20, 50, 100 Ω)', () => {
+    expect(snapToPreset(4, RESISTOR_PRESETS)).toBe(5)
+    expect(snapToPreset(12, RESISTOR_PRESETS)).toBe(10)
+    expect(snapToPreset(22, RESISTOR_PRESETS)).toBe(20)
+    expect(snapToPreset(47, RESISTOR_PRESETS)).toBe(50)
+    expect(snapToPreset(82, RESISTOR_PRESETS)).toBe(100)
+    expect(snapToPreset(150, RESISTOR_PRESETS)).toBe(100)
+  })
+
+  it('validateNetlist sets default values and snaps parsed labels', () => {
+    const raw = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        // Battery with 5V label snaps to 4.5V
+        { id: 'b1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 5 },
+        // Battery without value defaults to 3V
+        { id: 'b2', type: 'battery', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
+        // Resistor with 22Ω snaps to 20Ω
+        { id: 'r1', type: 'resistor', from: { row: 0, col: 2 }, to: { row: 0, col: 3 }, value: 22 },
+        // Resistor without value defaults to 10Ω
+        { id: 'r2', type: 'resistor', from: { row: 0, col: 3 }, to: { row: 0, col: 4 } },
+        // Switch without closed defaults to true
+        { id: 'sw1', type: 'switch', from: { row: 1, col: 0 }, to: { row: 1, col: 1 } },
+        // Switch with closed=false preserved
+        { id: 'sw2', type: 'switch', from: { row: 1, col: 1 }, to: { row: 1, col: 2 }, closed: false },
+      ],
+    }
+
+    const validated = validateNetlist(raw)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+
+    const comps = validated.netlist.components
+    expect(comps.find((c) => c.id === 'b1')?.value).toBe(4.5)
+    expect(comps.find((c) => c.id === 'b2')?.value).toBe(DEFAULT_BATTERY_VOLTAGE)
+    expect(comps.find((c) => c.id === 'r1')?.value).toBe(20)
+    expect(comps.find((c) => c.id === 'r2')?.value).toBe(DEFAULT_RESISTOR_OHMS)
+    expect(comps.find((c) => c.id === 'sw1')?.closed).toBe(true)
+    expect(comps.find((c) => c.id === 'sw2')?.closed).toBe(false)
+  })
+})
+
+describe('i18n suspect wire messages', () => {
+  it('contains English and Kannada suspect wire messages', () => {
+    expect(drawI18n.en.suspect_wire_msg).toBe(
+      'Pahunch might have added this wire — tap it to remove',
+    )
+    expect(drawI18n.kn.suspect_wire_msg).toBe(
+      'ಪಾಹುಂಚ್ ಈ ತಂತಿಯನ್ನು ಸೇರಿಸಿರಬಹುದು — ತೆಗೆಯಲು ಅದನ್ನು ತಟ್ಟಿ',
+    )
   })
 })
