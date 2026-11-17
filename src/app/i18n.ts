@@ -29,6 +29,8 @@ const messages = {
     bulbResistance: 'Bulb resistance', resistorResistance: 'Resistance',
     decreaseVoltage: 'Decrease voltage', increaseVoltage: 'Increase voltage',
     voltageValue: 'Voltage',
+    howManyOhms: 'How many ohms?', howManyVolts: 'How many volts?', done: 'Done',
+    partMoving: 'Drag to move this part.', moveBlocked: 'That spot is occupied.',
   },
   kn: {
     welcome: 'ಮಾಡುತ್ತಾ ಕಲಿಯಿರಿ', build: 'ಕಟ್ಟಿ', draw: 'ಚಿತ್ರಿಸಿ', sparsh: 'ಸ್ಪರ್ಶ', learn: 'ಕಲಿಯಿರಿ',
@@ -61,6 +63,8 @@ const messages = {
     bulbResistance: 'ಬಲ್ಬ್‌ನ ರೆಸಿಸ್ಟೆನ್ಸ್', resistorResistance: 'ರೆಸಿಸ್ಟೆನ್ಸ್',
     decreaseVoltage: 'ವೋಲ್ಟೇಜ್ ಕಡಿಮೆ ಮಾಡಿ', increaseVoltage: 'ವೋಲ್ಟೇಜ್ ಹೆಚ್ಚಿಸಿ',
     voltageValue: 'ವೋಲ್ಟೇಜ್',
+    howManyOhms: 'ಎಷ್ಟು ಓಮ್?', howManyVolts: 'ಎಷ್ಟು ವೋಲ್ಟ್?', done: 'ಆಯಿತು',
+    partMoving: 'ಈ ಭಾಗವನ್ನು ಎಳೆಯಿರಿ.', moveBlocked: 'ಆ ಜಾಗದಲ್ಲಿ ಇನ್ನೊಂದು ಭಾಗ ಇದೆ.',
   },
 } as const
 

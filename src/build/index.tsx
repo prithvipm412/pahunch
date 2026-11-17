@@ -5,7 +5,7 @@ import { solve } from '../physics'
 import { stopSonify, sonify } from '../audio'
 import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
-import { wireSegmentsForDragPath, type WireSegment } from './wirePath'
+import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
 
 const parts: { type: ComponentType; key: TranslationKey; icon: string }[] = [
   { type: 'battery', key: 'battery', icon: '▤' }, { type: 'bulb', key: 'bulb', icon: '◉' },
@@ -18,6 +18,7 @@ const isVertical = (component: CircuitComponent) => component.from.col === compo
 const labelFor = (component: CircuitComponent, translate: (key: TranslationKey) => string) => component.type === 'battery' ? `${component.value ?? 3} V` : component.type === 'resistor' ? `${component.value ?? 10} Ω` : component.type === 'switch' ? (component.closed === false ? translate('open') : translate('closed')) : translate(component.type)
 const formatValue = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1)
 const componentValueLabel = (component: CircuitComponent) => component.type === 'battery' ? `${formatValue(component.value ?? 3)} V` : component.type === 'resistor' || component.type === 'bulb' ? `${formatValue(component.value ?? 10)} Ω` : null
+const samePath = (first: readonly GridPoint[], second: readonly GridPoint[]) => first.length === second.length && first.every((point, index) => point.row === second[index].row && point.col === second[index].col)
 
 interface WireDrag {
   pointerId: number
@@ -26,7 +27,19 @@ interface WireDrag {
   addedComponents: CircuitComponent[]
 }
 
-function SymbolGraphic({ component, result, selected, onClick, translate, interactive }: { component: CircuitComponent; result?: ComponentResult; selected: boolean; onClick: () => void; translate: (key: TranslationKey) => string; interactive: boolean }) {
+interface PartDrag {
+  pointerId: number
+  component: CircuitComponent
+  startX: number
+  startY: number
+  offsetX: number
+  offsetY: number
+  candidate: CircuitComponent
+  valid: boolean
+  moved: boolean
+}
+
+function SymbolGraphic({ component, result, selected, onClick, onPointerDown, translate, interactive, ghost }: { component: CircuitComponent; result?: ComponentResult; selected: boolean; onClick: () => void; onPointerDown?: (event: ReactPointerEvent<SVGGElement>) => void; translate: (key: TranslationKey) => string; interactive: boolean; ghost?: 'valid' | 'invalid' }) {
   const x1 = xAt(component.from), y1 = yAt(component.from), x2 = xAt(component.to), y2 = yAt(component.to)
   const vertical = isVertical(component)
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2
@@ -35,7 +48,7 @@ function SymbolGraphic({ component, result, selected, onClick, translate, intera
   const glow = component.type === 'bulb' ? `bulb-${result?.state ?? 'off'}` : ''
   const current = Math.abs(result?.current ?? 0)
   const duration = Math.max(.22, Math.min(1.8, 1.8 / (1 + current)))
-  return <g className={`${selected ? 'selected-part' : ''} ${glow}`} onClick={(event) => { event.stopPropagation(); if (interactive) onClick() }} pointerEvents={interactive ? 'auto' : 'none'} role="button" tabIndex={interactive ? 0 : -1} aria-label={`${translate(component.type)}, ${labelFor(component, translate)}`}>
+  return <g className={`${selected ? 'selected-part' : ''} ${glow} ${ghost ? `move-ghost move-ghost-${ghost}` : ''}`} onPointerDown={onPointerDown} onClick={(event) => { if (interactive) { event.stopPropagation(); onClick() } }} pointerEvents={interactive ? 'auto' : 'none'} role="button" tabIndex={interactive ? 0 : -1} aria-label={`${translate(component.type)}, ${labelFor(component, translate)}`}>
     <line x1={x1} y1={y1} x2={x2} y2={y2} className="part-line" />
     {result && current > 0 && <line x1={x1} y1={y1} x2={x2} y2={y2} className="flow-line" style={{ '--flow-duration': `${duration}s` } as CSSProperties} />}
     <g transform={`translate(${cx} ${cy}) rotate(${vertical ? 90 : 0})`}>
@@ -63,11 +76,15 @@ export default function BuildScreen() {
   const [placing, setPlacing] = useState<ComponentType | null>(null)
   const [firstPoint, setFirstPoint] = useState<GridPoint | null>(null)
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [editOpen, setEditOpen] = useState(false)
+  const [movePreview, setMovePreview] = useState<{ component: CircuitComponent; valid: boolean } | null>(null)
   const [result, setResult] = useState<SolveResult | null>(null)
   const [notice, setNotice] = useState(() => translate('hintStart'))
   const [wirePreview, setWirePreview] = useState<{ from: GridPoint; to: { x: number; y: number } } | null>(null)
   const wireDragRef = useRef<WireDrag | null>(null)
+  const partDragRef = useRef<PartDrag | null>(null)
   const suppressWireClickRef = useRef(false)
+  const suppressPartClickRef = useRef(false)
   const selected = netlist.components.find((item) => item.id === selectedId)
   const resultMap = useMemo(() => new Map((result?.components ?? []).map((item) => [item.id, item])), [result])
 
@@ -88,10 +105,10 @@ export default function BuildScreen() {
 
   function choosePart(type: ComponentType) {
     if (type === 'wire' && placing === 'wire') {
-      setPlacing(null); setFirstPoint(null); setNotice(translate('hintStart'))
+      setPlacing(null); setFirstPoint(null); setEditOpen(false); setNotice(translate('hintStart'))
       return
     }
-    setPlacing(type); setFirstPoint(null); setSelectedId(null)
+    setPlacing(type); setFirstPoint(null); setSelectedId(null); setEditOpen(false)
     setNotice(type === 'wire' ? translate('wireHint') : translate('hintChoose'))
   }
   function addComponent(from: GridPoint, to: GridPoint) {
@@ -106,8 +123,14 @@ export default function BuildScreen() {
       }
     }
     const newComponent: CircuitComponent = { id: `build-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, type, from, to, ...((type === 'battery' || type === 'bulb' || type === 'resistor') ? { value: type === 'battery' ? 3 : 10 } : {}), ...(type === 'switch' ? { closed: true } : {}) }
+    if (type !== 'wire' && netlist.components.some((component) => componentsOverlap(newComponent, component))) {
+      setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
+    }
     saveNetlist({ ...netlist, source: 'build', components: [...netlist.components, newComponent] })
-    if (type !== 'wire') { setPlacing(null); setSelectedId(newComponent.id) }
+    if (type !== 'wire') {
+      setPlacing(null); setSelectedId(newComponent.id)
+      setEditOpen(type === 'battery' || type === 'resistor')
+    }
     setFirstPoint(null); setNotice(type === 'wire' ? translate('wireHint') : tWith('partAdded', lang, { part: translate(type) }))
   }
   function tapDot(row: number, col: number) {
@@ -139,18 +162,72 @@ export default function BuildScreen() {
   }
 
   function appendDragWires(drag: WireDrag) {
-    const segments = wireSegmentsForDragPath(drag.path, [...drag.startNetlist.components, ...drag.addedComponents])
-    if (segments.length === 0) return
-    const added = segments.map((segment: WireSegment): CircuitComponent => ({
+    const oldIds = new Set(drag.addedComponents.map((component) => component.id))
+    const segments = wireSegmentsForDragPath(drag.path, drag.startNetlist.components)
+    const added = segments.map((segment): CircuitComponent => ({
       id: `build-wire-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
       type: 'wire',
       from: segment.from,
       to: segment.to,
     }))
-    drag.addedComponents.push(...added)
-    setNetlist((current) => ({ ...current, source: 'build', components: [...current.components, ...added] }))
-    setResult(null)
-    stopSonify()
+    drag.addedComponents = added
+    setNetlist((current) => ({ ...current, source: 'build', components: [...current.components.filter((component) => !oldIds.has(component.id)), ...added] }))
+    if (oldIds.size > 0 || added.length > 0) { setResult(null); stopSonify() }
+  }
+
+  function beginPartDrag(component: CircuitComponent, event: ReactPointerEvent<SVGGElement>) {
+    if (placing) return
+    event.stopPropagation()
+    const svg = event.currentTarget.ownerSVGElement
+    if (!svg) return
+    const point = canvasPoint(event, svg)
+    svg.setPointerCapture(event.pointerId)
+    const fromX = xAt(component.from), fromY = yAt(component.from)
+    const drag: PartDrag = {
+      pointerId: event.pointerId, component, startX: point.x, startY: point.y,
+      offsetX: point.x - fromX, offsetY: point.y - fromY,
+      candidate: component, valid: true, moved: false,
+    }
+    partDragRef.current = drag
+  }
+
+  function movePartDrag(drag: PartDrag, point: { x: number; y: number }) {
+    const dx = point.x - drag.startX, dy = point.y - drag.startY
+    if (!drag.moved && Math.hypot(dx, dy) < 8) return
+    drag.moved = true
+    const horizontal = Math.abs(dx) + Math.abs(dy) < 18
+      ? drag.component.from.row === drag.component.to.row
+      : Math.abs(dx) >= Math.abs(dy)
+    const span = Math.max(1, Math.abs(drag.component.to.row - drag.component.from.row), Math.abs(drag.component.to.col - drag.component.from.col))
+    const desired = { x: point.x - drag.offsetX, y: point.y - drag.offsetY }
+    let col = Math.round((desired.x - 34) / 73), row = Math.round((desired.y - 34) / 73)
+    if (horizontal) { row = Math.max(0, Math.min(4, row)); col = Math.max(0, Math.min(4 - span, col)) }
+    else { col = Math.max(0, Math.min(4, col)); row = Math.max(0, Math.min(4 - span, row)) }
+    const from = { row, col }
+    const to = horizontal ? { row, col: col + span } : { row: row + span, col }
+    const candidate = { ...drag.component, from, to }
+    const valid = !netlist.components.some((part) => part.id !== drag.component.id && componentsOverlap(candidate, part))
+    drag.candidate = candidate
+    drag.valid = valid
+    setMovePreview({ component: candidate, valid })
+  }
+
+  function finishPartDrag(event: ReactPointerEvent<SVGSVGElement>) {
+    const drag = partDragRef.current
+    if (!drag || drag.pointerId !== event.pointerId) return false
+    if (event.type === 'pointerup' && drag.moved && drag.valid) {
+      saveNetlist({ ...netlist, source: 'build', components: netlist.components.map((component) => component.id === drag.component.id ? drag.candidate : component) }, true)
+      setSelectedId(drag.component.id)
+      setEditOpen(false)
+      suppressPartClickRef.current = true
+      setNotice(translate('partMoving'))
+    } else if (drag.moved && !drag.valid) {
+      suppressPartClickRef.current = true
+      setNotice(translate('moveBlocked'))
+    }
+    partDragRef.current = null
+    setMovePreview(null)
+    return true
   }
 
   function startWireDrag(event: ReactPointerEvent<SVGSVGElement>) {
@@ -167,29 +244,40 @@ export default function BuildScreen() {
   }
 
   function moveWireDrag(event: ReactPointerEvent<SVGSVGElement>) {
+    const partDrag = partDragRef.current
+    if (partDrag && partDrag.pointerId === event.pointerId) {
+      event.preventDefault()
+      movePartDrag(partDrag, canvasPoint(event, event.currentTarget))
+      return
+    }
     const drag = wireDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     event.preventDefault()
     const point = canvasPoint(event, event.currentTarget)
     const snapped = nearestGridPoint(point)
-    const last = drag.path[drag.path.length - 1]
-    if (snapped && (snapped.row !== last.row || snapped.col !== last.col) && (snapped.row === last.row || snapped.col === last.col)) {
-      drag.path.push(snapped)
-      appendDragWires(drag)
+    if (snapped) {
+      const nextPath = extendWireDragPath(drag.path, snapped)
+      if (!samePath(nextPath, drag.path)) {
+        drag.path = nextPath
+        appendDragWires(drag)
+      }
     }
     setWirePreview({ from: drag.path[drag.path.length - 1], to: point })
   }
 
   function finishWireDrag(event: ReactPointerEvent<SVGSVGElement>) {
+    if (finishPartDrag(event)) return
     let drag = wireDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
     if (event.type === 'pointerup') {
       const point = canvasPoint(event, event.currentTarget)
       const snapped = nearestGridPoint(point)
-      const last = drag.path[drag.path.length - 1]
-      if (snapped && (snapped.row !== last.row || snapped.col !== last.col) && (snapped.row === last.row || snapped.col === last.col)) {
-        drag.path.push(snapped)
-        appendDragWires(drag)
+      if (snapped) {
+        const nextPath = extendWireDragPath(drag.path, snapped)
+        if (!samePath(nextPath, drag.path)) {
+          drag.path = nextPath
+          appendDragWires(drag)
+        }
       }
     }
     drag = wireDragRef.current
@@ -203,8 +291,12 @@ export default function BuildScreen() {
   }
 
   function handleGridClick(event: ReactMouseEvent<SVGSVGElement>) {
-    if (placing !== 'wire') return
-    if (suppressWireClickRef.current) {
+    if (suppressPartClickRef.current) {
+      suppressPartClickRef.current = false
+      return
+    }
+    if (!placing) return
+    if (placing === 'wire' && suppressWireClickRef.current) {
       suppressWireClickRef.current = false
       return
     }
@@ -224,21 +316,22 @@ export default function BuildScreen() {
   const friendlyErrors = result?.errors.map((error) => error === 'no_battery' || error === 'empty' ? translate('noBattery') : error === 'short_circuit' ? translate('shortCircuit') : error === 'open_circuit' ? translate('openCircuit') : translate('otherError'))
   function clearCircuit() {
     saveNetlist(initialNetlist)
-    setSelectedId(null); setPlacing(null); setFirstPoint(null); setNotice(translate('circuitCleared'))
+    setSelectedId(null); setEditOpen(false); setPlacing(null); setFirstPoint(null); setNotice(translate('circuitCleared'))
   }
 
   function undoLast() {
     const previous = undoStack[undoStack.length - 1]
     if (!previous) return
-    setNetlist(previous); setUndoStack((history) => history.slice(0, -1)); setSelectedId(null); setResult(null); stopSonify(); setNotice(translate('hintStart'))
+    setNetlist(previous); setUndoStack((history) => history.slice(0, -1)); setSelectedId(null); setEditOpen(false); setResult(null); stopSonify(); setNotice(translate('hintStart'))
   }
 
   return <main className="builder">
     <header className="builder-top"><Link to="/" className="back-link" aria-label={translate('backHome')}>←</Link><div><p className="eyebrow">PAHUNCH · {translate('circuitLab')}</p><h1>{translate('buildTitle')}</h1></div></header>
     {loadedNetlist && <p className="loaded-note" role="status">{translate('loadedDrawing')}</p>}
     <div className="builder-card"><svg className={`circuit-svg${placing === 'wire' ? ' wire-active' : ''}`} viewBox="0 0 360 360" role="img" aria-label={translate('gridLabel')} onPointerDown={startWireDrag} onPointerMove={moveWireDrag} onPointerUp={finishWireDrag} onPointerCancel={finishWireDrag} onClick={handleGridClick}>
-      {Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => <g key={`dot-${row}-${col}`} className="grid-cell" onClick={() => { if (placing !== 'wire') tapDot(row, col) }} role="button" tabIndex={0} aria-label={`${translate('tapDot')} ${row + 1}, ${col + 1}`} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') tapDot(row, col) }}><rect x={xAt({ row, col }) - 30} y={yAt({ row, col }) - 30} width="60" height="60" fill="transparent" /><circle cx={xAt({ row, col })} cy={yAt({ row, col })} r={firstPoint?.row === row && firstPoint.col === col ? 7 : 5} className="grid-dot" /></g>))}
-      {netlist.components.map((component) => <SymbolGraphic key={component.id} component={component} result={resultMap.get(component.id)} selected={component.id === selectedId} translate={translate} interactive={!placing} onClick={() => { setSelectedId(component.id); setPlacing(null) }} />)}
+      {Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => <g key={`dot-${row}-${col}`} className="grid-cell" role="button" tabIndex={0} aria-label={`${translate('tapDot')} ${row + 1}, ${col + 1}`} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') tapDot(row, col) }}><rect x={xAt({ row, col }) - 30} y={yAt({ row, col }) - 30} width="60" height="60" fill="transparent" /><circle cx={xAt({ row, col })} cy={yAt({ row, col })} r={firstPoint?.row === row && firstPoint.col === col ? 7 : 5} className="grid-dot" /></g>))}
+      {netlist.components.map((component) => <SymbolGraphic key={component.id} component={component} result={resultMap.get(component.id)} selected={component.id === selectedId} translate={translate} interactive={!placing} onPointerDown={(event) => beginPartDrag(component, event)} onClick={() => { if (suppressPartClickRef.current) { suppressPartClickRef.current = false; return } setSelectedId(component.id); setPlacing(null); setEditOpen(true) }} />)}
+      {movePreview && <SymbolGraphic component={movePreview.component} selected={false} translate={translate} interactive={false} ghost={movePreview.valid ? 'valid' : 'invalid'} onClick={() => undefined} />}
       {wirePreview && <line x1={xAt(wirePreview.from)} y1={yAt(wirePreview.from)} x2={wirePreview.to.x} y2={wirePreview.to.y} className="wire-preview" />}
     </svg></div>
     <p className="builder-hint" aria-live="polite">{notice}</p>
@@ -249,14 +342,15 @@ export default function BuildScreen() {
       <button className="action-button" onClick={undoLast} disabled={undoStack.length === 0}>{translate('undo')}</button>
       <button className="action-button" onClick={clearCircuit}>{translate('clear')}</button>
     </div>
-    {selected && <section className="selection-panel" aria-label={translate('selectedComponent')}><strong>{translate(selected.type)}</strong>
-      {selected.type === 'battery' && <div className="value-control"><span>{translate('voltageValue')}</span><button aria-label={translate('decreaseVoltage')} disabled={(selected.value ?? 3) <= 1.5} onClick={() => updateSelected({ value: Math.max(1.5, Number(((selected.value ?? 3) - 1.5).toFixed(1))) })}>−</button><output>{formatValue(selected.value ?? 3)} V</output><button aria-label={translate('increaseVoltage')} disabled={(selected.value ?? 3) >= 9} onClick={() => updateSelected({ value: Math.min(9, Number(((selected.value ?? 3) + 1.5).toFixed(1))) })}>+</button></div>}
-      {selected.type === 'resistor' && <label className="value-picker">{translate('resistorResistance')}<select aria-label={translate('resistorResistance')} value={selected.value ?? 10} onChange={(event) => updateSelected({ value: Number(event.target.value) })}>{[5, 10, 20, 50, 100].map((value) => <option key={value} value={value}>{value} Ω</option>)}</select></label>}
-      {selected.type === 'bulb' && <label className="value-picker">{translate('bulbResistance')}<select aria-label={translate('bulbResistance')} value={selected.value ?? 10} onChange={(event) => updateSelected({ value: Number(event.target.value) })}>{[5, 10, 20].map((value) => <option key={value} value={value}>{value} Ω</option>)}</select></label>}
-      {selected.type === 'switch' && <button onClick={() => updateSelected({ closed: selected.closed === false })}>{selected.closed === false ? translate('closeSwitch') : translate('openSwitch')}</button>}
-      <button onClick={() => { saveNetlist({ ...netlist, components: netlist.components.filter((component) => component.id !== selected.id) }); setSelectedId(null) }}>{translate('delete')}</button>
+    {editOpen && selected && <div className="edit-overlay" onClick={() => setEditOpen(false)}><section className="edit-dialog" role="dialog" aria-modal="true" aria-label={translate('selectedComponent')} onClick={(event) => event.stopPropagation()}>
+      <strong>{selected.type === 'battery' ? translate('howManyVolts') : selected.type === 'resistor' || selected.type === 'bulb' ? translate('howManyOhms') : translate(selected.type)}</strong>
+      {selected.type === 'battery' && <div className="preset-row">{[1.5, 3, 4.5, 6, 9].map((value) => <button key={value} aria-pressed={(selected.value ?? 3) === value} onClick={() => updateSelected({ value })}>{formatValue(value)} V</button>)}</div>}
+      {selected.type === 'resistor' && <div className="preset-row">{[5, 10, 20, 50, 100].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
+      {selected.type === 'bulb' && <div className="preset-row">{[5, 10, 20].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
+      {selected.type === 'switch' && <div className="preset-row"><button aria-pressed={selected.closed !== false} onClick={() => updateSelected({ closed: true })}>{translate('closed')}</button><button aria-pressed={selected.closed === false} onClick={() => updateSelected({ closed: false })}>{translate('open')}</button></div>}
+      <div className="edit-actions"><button onClick={() => { saveNetlist({ ...netlist, components: netlist.components.filter((component) => component.id !== selected.id) }); setSelectedId(null); setEditOpen(false) }}>{translate('delete')}</button><button className="edit-done" onClick={() => setEditOpen(false)}>{translate('done')}</button></div>
       {resultMap.has(selected.id) && <span className="selected-readout">{translate('voltage')}: {resultMap.get(selected.id)!.voltage.toFixed(2)} V · {translate('current')}: {resultMap.get(selected.id)!.current.toFixed(3)} A · {translate('power')}: {resultMap.get(selected.id)!.power.toFixed(3)} W</span>}
-    </section>}
+    </section></div>}
     {result && <section className="result-panel" aria-live="polite" aria-label={translate('runResults')}>
       {friendlyErrors?.length ? <div className="result-banner">{friendlyErrors.join(' ')}</div> : !result.ok ? <div className="result-banner">{translate('fallbackError')}</div> : null}
       {result.warnings.length > 0 && <p>{translate('warnings')}</p>}

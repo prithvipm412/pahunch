@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CircuitComponent } from '../contracts/netlist'
-import { wireSegmentsForDragPath } from './wirePath'
+import { extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
 
 const p = (row: number, col: number) => ({ row, col })
 
@@ -25,8 +25,18 @@ describe('wireSegmentsForDragPath', () => {
     expect(wireSegmentsForDragPath([p(0, 0), p(1, 1), p(2, 2)])).toEqual([])
   })
 
-  it('does not repeat edges when the path backtracks', () => {
-    expect(wireSegmentsForDragPath([p(0, 0), p(0, 2), p(0, 0)])).toHaveLength(2)
+  it('removes one segment for every previous dot crossed while backtracking', () => {
+    const forward = extendWireDragPath([p(0, 0)], p(0, 3))
+    expect(forward).toEqual([p(0, 0), p(0, 1), p(0, 2), p(0, 3)])
+    expect(extendWireDragPath(forward, p(0, 0))).toEqual([p(0, 0)])
+    expect(wireSegmentsForDragPath(extendWireDragPath(forward, p(0, 2)))).toEqual([
+      { from: p(0, 0), to: p(0, 1) },
+      { from: p(0, 1), to: p(0, 2) },
+    ])
+  })
+
+  it('does not accept diagonal wire drag points', () => {
+    expect(extendWireDragPath([p(0, 0), p(0, 1)], p(1, 2))).toEqual([p(0, 0), p(0, 1)])
   })
 
   it('skips a segment covered by an existing wire or part', () => {
