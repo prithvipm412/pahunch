@@ -1,0 +1,122 @@
+.space-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.space-gradient {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(ellipse at 20% -10%, rgba(255, 216, 102, 0.07), transparent 55%),
+    linear-gradient(165deg, #050b1f 0%, #0a1a3f 48%, #0d2257 100%);
+}
+
+.starfield {
+  position: absolute;
+  inset: 0;
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 0 4px 1px rgba(255, 255, 255, 0.5);
+  animation-name: twinkle;
+  animation-iteration-count: infinite;
+  animation-timing-function: ease-in-out;
+}
+
+.wire-path-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.electron {
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  top: 0;
+  left: 0;
+  border-radius: 50%;
+  background: #d7f4ff;
+  box-shadow: 0 0 10px 3px rgba(111, 227, 255, 0.75);
+  offset-path: path('M -20 120 C 120 60, 180 260, 340 220 S 420 480, 260 540 S 80 700, 380 760');
+  animation-name: electron-travel;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+.electron-a {
+  animation-duration: 16s;
+}
+
+.electron-b {
+  animation-duration: 23s;
+  animation-delay: 6s;
+}
+
+.float-item {
+  position: absolute;
+  filter: drop-shadow(0 0 6px rgba(111, 227, 255, 0.35));
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  will-change: transform, opacity;
+}
+
+.float-item svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.drift-1 {
+  animation-name: drift-1;
+}
+
+.drift-2 {
+  animation-name: drift-2;
+}
+
+.drift-3 {
+  animation-name: drift-3;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; }
+  50% { opacity: 0.9; }
+}
+
+@keyframes electron-travel {
+  from { offset-distance: 0%; }
+  to { offset-distance: 100%; }
+}
+
+@keyframes drift-1 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(18px, -22px) rotate(8deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes drift-2 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(-20px, 16px) rotate(-10deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@keyframes drift-3 {
+  0% { transform: translate(0, 0) rotate(0deg); }
+  50% { transform: translate(14px, 20px) rotate(6deg); }
+  100% { transform: translate(0, 0) rotate(0deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .star,
+  .electron,
+  .float-item {
+    animation: none !important;
+  }
+}
