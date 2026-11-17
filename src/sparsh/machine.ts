@@ -19,6 +19,17 @@ export interface ExploreState {
   overComponentId: string | null
 }
 
+// The guided lesson (Phase 3): build 1 battery + 2 bulbs in series, run it, then rebuild the
+// same two bulbs in parallel and run again. 'series'/'parallel' are the building phases
+// (stepIndex tracks progress within SERIES_STEP_CLIPS / the single parallel step);
+// 'seriesRun'/'parallelRun' mean the build is done and we're waiting for a two-finger tap.
+export type LessonPhase = 'series' | 'seriesRun' | 'parallel' | 'parallelRun'
+
+export interface LessonState {
+  phase: LessonPhase
+  stepIndex: number
+}
+
 export interface SparshState {
   mode: Mode
   cursor: GridPoint
@@ -27,6 +38,7 @@ export interface SparshState {
   explore: ExploreState | null
   lastResult: SolveResult | null
   nextId: number
+  lesson: LessonState | null
 }
 
 export type SparshEvent =
@@ -35,6 +47,7 @@ export type SparshEvent =
   | { type: 'DOUBLE_TAP' }
   | { type: 'LONG_PRESS' }
   | { type: 'TWO_FINGER_TAP' }
+  | { type: 'TWO_FINGER_DOUBLE_TAP' }
   | { type: 'TWO_FINGER_SWIPE_LEFT' }
   | { type: 'SOLVE_RESULT'; result: SolveResult }
   | { type: 'DRAG'; point: GridPoint }
@@ -67,7 +80,76 @@ export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
     explore: null,
     lastResult: null,
     nextId: 1,
+    lesson: null,
   }
+}
+
+const SERIES_STEP_CLIPS: ClipName[][] = [
+  ['lesson_step_battery'],
+  ['lesson_step_bulb1'],
+  ['lesson_step_bulb2'],
+  ['lesson_step_close_loop'],
+]
+
+const PARALLEL_STEP_CLIPS: ClipName[][] = [['lesson_parallel_intro']]
+
+function isSeriesStepComplete(stepIndex: number, netlist: Netlist): boolean {
+  const { counts, topology } = describeCircuit(netlist)
+  if (stepIndex === 0) return counts.battery >= 1
+  if (stepIndex === 1) return counts.bulb >= 1
+  if (stepIndex === 2) return counts.bulb >= 2
+  return topology === 'series' && counts.bulb >= 2 && counts.battery >= 1
+}
+
+function isParallelStepComplete(netlist: Netlist): boolean {
+  const { counts, topology } = describeCircuit(netlist)
+  return topology === 'parallel' && counts.bulb >= 2 && counts.battery >= 1
+}
+
+// Re-checks the active lesson step against the (possibly just-edited) netlist and advances as
+// far as it can — looping lets an out-of-order build (e.g. placing both bulbs before the
+// battery) cascade through every step it already satisfies in one go. Returns extra speak
+// effects to append to whatever the triggering transition already produced.
+function advanceLesson(state: SparshState): SparshTransition {
+  let current = state
+  const effects: SparshEffect[] = []
+
+  for (;;) {
+    const lesson = current.lesson
+    if (!lesson) break
+
+    if (lesson.phase === 'series') {
+      if (!isSeriesStepComplete(lesson.stepIndex, current.netlist)) break
+      const nextStepIndex = lesson.stepIndex + 1
+      if (nextStepIndex < SERIES_STEP_CLIPS.length) {
+        current = { ...current, lesson: { phase: 'series', stepIndex: nextStepIndex } }
+        effects.push({ type: 'speak', clips: ['lesson_good', ...SERIES_STEP_CLIPS[nextStepIndex]] })
+        continue
+      }
+      current = { ...current, lesson: { phase: 'seriesRun', stepIndex: 0 } }
+      effects.push({ type: 'speak', clips: ['lesson_good', 'lesson_series_ready'] })
+      break
+    }
+
+    if (lesson.phase === 'parallel') {
+      if (!isParallelStepComplete(current.netlist)) break
+      current = { ...current, lesson: { phase: 'parallelRun', stepIndex: 0 } }
+      effects.push({ type: 'speak', clips: ['lesson_good', 'lesson_parallel_ready'] })
+      break
+    }
+
+    break
+  }
+
+  return { state: current, effects }
+}
+
+// Wraps a transition that may have changed the netlist: if a lesson is active, checks whether
+// that edit completed its current step and appends any resulting lesson speech.
+function withLessonCheck(transition: SparshTransition): SparshTransition {
+  if (!transition.state.lesson) return transition
+  const advanced = advanceLesson(transition.state)
+  return { state: advanced.state, effects: [...transition.effects, ...advanced.effects] }
 }
 
 function pointsEqual(a: GridPoint, b: GridPoint): boolean {
@@ -99,15 +181,22 @@ function switchClipFor(closed: boolean): ClipName {
   return closed ? 'switch_closed' : 'switch_open'
 }
 
-function editMenuOptionsFor(component: CircuitComponent): Array<'remove' | 'toggle'> {
-  return component.type === 'switch' ? ['remove', 'toggle'] : ['remove']
+type EditMenuOption = 'remove' | 'toggle' | 'add'
+
+// 'add' lets a new part be started from a dot that already has a part on it — without it, a
+// loop could never be closed, since the dot that closes it is, by definition, already occupied
+// by the parts on either side of the gap.
+function editMenuOptionsFor(component: CircuitComponent): EditMenuOption[] {
+  return component.type === 'switch' ? ['remove', 'toggle', 'add'] : ['remove', 'add']
 }
 
 // Spoken preview for the currently-highlighted edit-menu option, built only from the fixed
 // clip vocabulary: "remove" previews as the 'removed' clip, "toggle" previews the switch state
-// it would flip *to*.
-function editMenuOptionClip(option: 'remove' | 'toggle', component: CircuitComponent): ClipName {
+// it would flip *to*, and "add" reuses 'menu_open' since it leads to the same part chooser as
+// double-tapping an empty dot.
+function editMenuOptionClip(option: EditMenuOption, component: CircuitComponent): ClipName {
   if (option === 'remove') return 'removed'
+  if (option === 'add') return 'menu_open'
   return switchClipFor(component.closed !== true)
 }
 
@@ -170,7 +259,7 @@ function handleBuildSwipe(state: SparshState, direction: Direction): SparshTrans
       to: neighbor,
       ...(buildSub.partType === 'switch' ? { closed: false } : {}),
     }
-    return {
+    return withLessonCheck({
       state: {
         ...state,
         nextId: state.nextId + 1,
@@ -178,7 +267,7 @@ function handleBuildSwipe(state: SparshState, direction: Direction): SparshTrans
         buildSub: { kind: 'idle' },
       },
       effects: [{ type: 'speak', clips: ['placed'] }],
-    }
+    })
   }
 
   // idle: move the cursor
@@ -211,17 +300,23 @@ function handleBuildDoubleTap(state: SparshState): SparshTransition {
     const options = editMenuOptionsFor(component)
     const option = options[buildSub.selectedIndex]
     if (option === 'remove') {
-      return {
+      return withLessonCheck({
         state: {
           ...state,
           buildSub: { kind: 'idle' },
           netlist: { ...netlist, components: netlist.components.filter((c) => c.id !== component.id) },
         },
         effects: [{ type: 'speak', clips: ['removed'] }],
+      })
+    }
+    if (option === 'add') {
+      return {
+        state: { ...state, buildSub: { kind: 'partMenu', target: buildSub.target, selectedIndex: 0 } },
+        effects: [{ type: 'speak', clips: ['menu_open', partClipFor(PART_MENU_ORDER[0])] }],
       }
     }
     const nextClosed = component.closed !== true
-    return {
+    return withLessonCheck({
       state: {
         ...state,
         buildSub: { kind: 'idle' },
@@ -231,7 +326,7 @@ function handleBuildDoubleTap(state: SparshState): SparshTransition {
         },
       },
       effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }],
-    }
+    })
   }
 
   if (buildSub.kind === 'placingWire') return noChange(state)
@@ -263,14 +358,26 @@ function handleSolveResult(state: SparshState, result: SolveResult): SparshTrans
   if (!result.ok) {
     return { state: { ...state, lastResult: result }, effects: [{ type: 'speak', clips: ['nothing_to_run'] }] }
   }
+
+  const clips: ClipName[] = ['run']
+  let lesson = state.lesson
+  if (lesson?.phase === 'seriesRun') {
+    clips.push('lesson_series_result')
+    lesson = { phase: 'parallel', stepIndex: 0 }
+  } else if (lesson?.phase === 'parallelRun') {
+    clips.push('lesson_compare', 'lesson_complete')
+    lesson = null
+  }
+
   return {
     state: {
       ...state,
       lastResult: result,
       mode: 'explore',
       explore: { point: state.cursor, overComponentId: null },
+      lesson,
     },
-    effects: [{ type: 'speak', clips: ['run'] }, { type: 'sonifyStart', result }],
+    effects: [{ type: 'speak', clips }, { type: 'sonifyStart', result }],
   }
 }
 
@@ -317,9 +424,33 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       if (state.mode !== 'build') return noChange(state)
       return { state, effects: [{ type: 'speak', clips: summaryClipsFor(state.netlist) }] }
 
-    case 'TWO_FINGER_TAP':
+    case 'TWO_FINGER_TAP': {
       if (state.mode === 'build') return { state, effects: [{ type: 'solve' }] }
-      return { state: { ...state, mode: 'build', explore: null }, effects: [{ type: 'sonifyStop' }] }
+      const effects: SparshEffect[] = [{ type: 'sonifyStop' }]
+      if (state.lesson?.phase === 'parallel') {
+        effects.push({ type: 'speak', clips: PARALLEL_STEP_CLIPS[0] })
+      }
+      return { state: { ...state, mode: 'build', explore: null }, effects }
+    }
+
+    case 'TWO_FINGER_DOUBLE_TAP': {
+      const wasExploring = state.mode === 'explore'
+      return {
+        state: {
+          ...state,
+          mode: 'build',
+          buildSub: { kind: 'idle' },
+          explore: null,
+          cursor: { row: 0, col: 0 },
+          netlist: { ...state.netlist, components: [] },
+          lesson: { phase: 'series', stepIndex: 0 },
+        },
+        effects: [
+          ...(wasExploring ? ([{ type: 'sonifyStop' }] as SparshEffect[]) : []),
+          { type: 'speak', clips: ['lesson_intro', ...SERIES_STEP_CLIPS[0]] },
+        ],
+      }
+    }
 
     case 'SOLVE_RESULT':
       return handleSolveResult(state, event.result)

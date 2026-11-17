@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifySwipe, pointFromClient } from './gestures'
+import { classifySwipe, isPairedTap, pointFromClient } from './gestures'
 
 describe('classifySwipe', () => {
   it('returns null below the distance threshold', () => {
@@ -28,5 +28,19 @@ describe('pointFromClient', () => {
 
   it('clamps out-of-bounds coordinates to the grid', () => {
     expect(pointFromClient(-50, 500, rect, 5)).toEqual({ row: 4, col: 0 })
+  })
+})
+
+describe('isPairedTap', () => {
+  it('pairs a tap that is close in both time and distance', () => {
+    expect(isPairedTap(1200, 1000, 50, 50, 55, 48, 350, 44)).toBe(true)
+  })
+
+  it('does not pair a tap outside the time window', () => {
+    expect(isPairedTap(1400, 1000, 50, 50, 52, 50, 350, 44)).toBe(false)
+  })
+
+  it('does not pair a tap outside the distance window', () => {
+    expect(isPairedTap(1100, 1000, 50, 50, 150, 50, 350, 44)).toBe(false)
   })
 })

@@ -8,6 +8,22 @@ export function classifySwipe(dx: number, dy: number, minDistance: number): Dire
   return Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : dy > 0 ? 'down' : 'up'
 }
 
+// True if a tap at (x, y) at time `now` is close enough in time and space to the previous tap
+// (lastTime, lastX, lastY) to pair with it as a double-tap. Shared by the single-finger and
+// two-finger double-tap detectors in index.tsx.
+export function isPairedTap(
+  now: number,
+  lastTime: number,
+  lastX: number,
+  lastY: number,
+  x: number,
+  y: number,
+  windowMs: number,
+  maxDistance: number,
+): boolean {
+  return now - lastTime < windowMs && Math.hypot(x - lastX, y - lastY) < maxDistance
+}
+
 export interface Rect {
   left: number
   top: number

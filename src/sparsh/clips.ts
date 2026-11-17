@@ -4,7 +4,8 @@ import type { ComponentType } from '../contracts/netlist'
 // public/audio/<lang>/<name>.mp3. Keep names stable — the recorded clips will reuse them.
 export const CLIPS = {
   welcome: 'Sparsh mode. Build a circuit by touch and sound.',
-  talkback_hint: 'Swipe to move. Double tap to place or edit a part. Long press for a summary. Two finger tap to run.',
+  talkback_hint:
+    'Swipe to move. Double tap to place or edit a part. Long press for a summary. Two finger tap to run. Two finger double tap for a guided lesson.',
   grid_intro: 'This is a 5 by 5 grid. You are at row 1, column 1.',
   edge: "You're at the edge.",
   empty: 'empty',
@@ -62,6 +63,22 @@ export const CLIPS = {
   pos_r5c3: 'row 5, column 3',
   pos_r5c4: 'row 5, column 4',
   pos_r5c5: 'row 5, column 5',
+
+  // Phase 3: guided lesson (1 battery, 2 bulbs — build in series, run, rebuild in parallel).
+  lesson_intro: "Let's build your first circuit together. I'll guide you, one step at a time.",
+  lesson_step_battery: 'First, place a battery.',
+  lesson_step_bulb1: 'Now add a bulb next to it.',
+  lesson_step_bulb2: 'Now add another bulb.',
+  lesson_step_close_loop: 'Now connect a wire to close the loop.',
+  lesson_good: 'Good.',
+  lesson_series_ready: "Your circuit is ready. Two finger tap to run it and listen.",
+  lesson_series_result:
+    "That's the hum of two bulbs in series. Two finger tap again when you're ready to rebuild it in parallel.",
+  lesson_parallel_intro:
+    'Now rebuild this in parallel. Move one bulb so it connects between the same two dots as the other bulb, then wire the loop closed again.',
+  lesson_parallel_ready: 'Your parallel circuit is ready. Two finger tap to run it.',
+  lesson_compare: 'Listen. In parallel, both bulbs shine at full brightness, and the hum is louder.',
+  lesson_complete: 'You finished the guided lesson. Great work.',
 } as const
 
 export type ClipName = keyof typeof CLIPS

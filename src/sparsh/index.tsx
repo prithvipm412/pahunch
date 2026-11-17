@@ -5,7 +5,7 @@ import { solve } from '../physics'
 import { playClip, sonify, stopAll, stopSonify, vibrate } from '../audio'
 import { useLanguage } from '../app/lang'
 import { fallbackFor } from './clips'
-import { classifySwipe, pointFromClient } from './gestures'
+import { classifySwipe, isPairedTap, pointFromClient } from './gestures'
 import { createInitialState, sparshReducer, type SparshEffect, type SparshEvent, type SparshState } from './machine'
 import './sparsh.css'
 
@@ -30,8 +30,12 @@ interface GestureTracker {
   lastTapTime: number
   lastTapX: number
   lastTapY: number
+  lastTwoFingerTapTime: number
+  lastTwoFingerTapX: number
+  lastTwoFingerTapY: number
   longPressTimer: number | null
   restTimer: number | null
+  pendingTwoFingerTapTimer: number | null
 }
 
 function createGestureTracker(): GestureTracker {
@@ -47,8 +51,12 @@ function createGestureTracker(): GestureTracker {
     lastTapTime: 0,
     lastTapX: 0,
     lastTapY: 0,
+    lastTwoFingerTapTime: 0,
+    lastTwoFingerTapX: 0,
+    lastTwoFingerTapY: 0,
     longPressTimer: null,
     restTimer: null,
+    pendingTwoFingerTapTimer: null,
   }
 }
 
@@ -208,7 +216,33 @@ export default function SparshScreen() {
     if (g.twoFinger) {
       if (e.touches.length === 0) {
         if (!g.twoFingerSwiped && Date.now() - g.startTime < TWO_FINGER_TAP_MAX_DURATION_MS) {
-          dispatch({ type: 'TWO_FINGER_TAP' })
+          const now = Date.now()
+          if (
+            isPairedTap(
+              now,
+              g.lastTwoFingerTapTime,
+              g.lastTwoFingerTapX,
+              g.lastTwoFingerTapY,
+              g.startX,
+              g.startY,
+              DOUBLE_TAP_WINDOW_MS,
+              DOUBLE_TAP_MAX_DIST,
+            )
+          ) {
+            clearPendingTwoFingerTapTimer()
+            g.lastTwoFingerTapTime = 0
+            dispatch({ type: 'TWO_FINGER_DOUBLE_TAP' })
+          } else {
+            // Defer the single tap until the window closes, in case a second tap pairs with it —
+            // otherwise the double-tap would fire the single-tap action (run/explore-toggle) too.
+            g.lastTwoFingerTapTime = now
+            g.lastTwoFingerTapX = g.startX
+            g.lastTwoFingerTapY = g.startY
+            g.pendingTwoFingerTapTimer = window.setTimeout(() => {
+              g.pendingTwoFingerTapTimer = null
+              dispatch({ type: 'TWO_FINGER_TAP' })
+            }, DOUBLE_TAP_WINDOW_MS)
+          }
         }
         g.twoFinger = false
       }
@@ -223,10 +257,7 @@ export default function SparshScreen() {
     if (g.moved || g.swipeDispatched || g.longPressFired) return
 
     const now = Date.now()
-    const closeToLastTap =
-      now - g.lastTapTime < DOUBLE_TAP_WINDOW_MS &&
-      Math.hypot(g.startX - g.lastTapX, g.startY - g.lastTapY) < DOUBLE_TAP_MAX_DIST
-    if (closeToLastTap) {
+    if (isPairedTap(now, g.lastTapTime, g.lastTapX, g.lastTapY, g.startX, g.startY, DOUBLE_TAP_WINDOW_MS, DOUBLE_TAP_MAX_DIST)) {
       g.lastTapTime = 0
       dispatch({ type: 'DOUBLE_TAP' })
     } else {
@@ -236,9 +267,18 @@ export default function SparshScreen() {
     }
   }
 
+  const clearPendingTwoFingerTapTimer = () => {
+    const g = gestureRef.current
+    if (g.pendingTwoFingerTapTimer !== null) {
+      window.clearTimeout(g.pendingTwoFingerTapTimer)
+      g.pendingTwoFingerTapTimer = null
+    }
+  }
+
   const onTouchCancel = () => {
     clearLongPressTimer()
     clearRestTimer()
+    clearPendingTwoFingerTapTimer()
     gestureRef.current.twoFinger = false
   }
 
