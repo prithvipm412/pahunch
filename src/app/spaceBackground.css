@@ -10,7 +10,7 @@
   position: absolute;
   inset: 0;
   background: radial-gradient(ellipse at 20% -10%, rgba(255, 216, 102, 0.07), transparent 55%),
-    linear-gradient(165deg, #050b1f 0%, #0a1a3f 48%, #0d2257 100%);
+    linear-gradient(165deg, #000000 0%, #05050a 48%, #0a0a12 100%);
 }
 
 .starfield {
