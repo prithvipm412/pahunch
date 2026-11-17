@@ -24,6 +24,11 @@ const messages = {
     voltage: 'Voltage', current: 'Current', power: 'Power', state: 'Bulb state',
     off: 'off', dim: 'dim', normal: 'normal', bright: 'bright', overload: 'overload',
     runResults: 'Circuit results', tapDot: 'Grid dot',
+    wireHint: 'Wire tool on: tap two dots or drag between dots. Tap Wire again to turn it off.',
+    hintOccupiedWire: 'That line already has a part or wire. Choose another path.',
+    bulbResistance: 'Bulb resistance', resistorResistance: 'Resistance',
+    decreaseVoltage: 'Decrease voltage', increaseVoltage: 'Increase voltage',
+    voltageValue: 'Voltage',
   },
   kn: {
     welcome: 'ಮಾಡುತ್ತಾ ಕಲಿಯಿರಿ', build: 'ಕಟ್ಟಿ', draw: 'ಚಿತ್ರಿಸಿ', sparsh: 'ಸ್ಪರ್ಶ', learn: 'ಕಲಿಯಿರಿ',
@@ -51,6 +56,11 @@ const messages = {
     voltage: 'ವೋಲ್ಟೇಜ್', current: 'ವಿದ್ಯುತ್ ಹರಿವು', power: 'ಶಕ್ತಿ', state: 'ಬಲ್ಬ್ ಸ್ಥಿತಿ',
     off: 'ಆರಿದೆ', dim: 'ಮಂದ', normal: 'ಸಾಮಾನ್ಯ', bright: 'ಹೊಳೆಯುತ್ತಿದೆ', overload: 'ಹೆಚ್ಚು ಬಿಸಿ',
     runResults: 'ವಲಯದ ಫಲಿತಾಂಶ', tapDot: 'ಜಾಲದ ಚುಕ್ಕೆ',
+    wireHint: 'ತಂತಿ ಆಯ್ಕೆ: ಎರಡು ಚುಕ್ಕೆಗಳನ್ನು ಮುಟ್ಟಿ ಅಥವಾ ಎಳೆಯಿರಿ. ತಂತಿಯನ್ನು ಮತ್ತೆ ಮುಟ್ಟಿ ನಿಲ್ಲಿಸಿ.',
+    hintOccupiedWire: 'ಆ ದಾರಿಯಲ್ಲಿ ಈಗಾಗಲೇ ಭಾಗ ಅಥವಾ ತಂತಿ ಇದೆ. ಬೇರೆ ದಾರಿ ಆಯ್ಕೆ ಮಾಡಿ.',
+    bulbResistance: 'ಬಲ್ಬ್‌ನ ರೆಸಿಸ್ಟೆನ್ಸ್', resistorResistance: 'ರೆಸಿಸ್ಟೆನ್ಸ್',
+    decreaseVoltage: 'ವೋಲ್ಟೇಜ್ ಕಡಿಮೆ ಮಾಡಿ', increaseVoltage: 'ವೋಲ್ಟೇಜ್ ಹೆಚ್ಚಿಸಿ',
+    voltageValue: 'ವೋಲ್ಟೇಜ್',
   },
 } as const
 
