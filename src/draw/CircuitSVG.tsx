@@ -39,19 +39,61 @@ function mid(r1: number, c1: number, r2: number, c2: number) {
   }
 }
 
-/** Glow color for bulb states */
-function bulbGlowColor(state?: string): string {
+interface BulbHaloConfig {
+  haloRadius: number
+  gradientId: string
+  opacity: number
+  className: string
+  coreFill: string
+  coreStroke: string
+  filamentStroke: string
+}
+
+function getDrawBulbRenderConfig(state?: string): BulbHaloConfig | null {
+  if (!state || state === 'off') return null
   switch (state) {
     case 'bright':
-      return '#FFF176'
+      return {
+        haloRadius: 28, // ~2.8x bulb radius
+        gradientId: 'draw-bulb-halo-bright',
+        opacity: 0.85,
+        className: 'bulb-halo-bright',
+        coreFill: '#ffe066',
+        coreStroke: '#ffd54a',
+        filamentStroke: '#18345f',
+      }
     case 'normal':
-      return '#FFD54F'
+      return {
+        haloRadius: 22, // ~2.2x bulb radius (R=10)
+        gradientId: 'draw-bulb-halo-normal',
+        opacity: 0.7, // opacity ~0.7
+        className: 'bulb-halo-normal',
+        coreFill: '#ffd54a', // warm yellow core #ffd54a
+        coreStroke: '#ffd54a',
+        filamentStroke: '#18345f',
+      }
     case 'dim':
-      return '#FF8A65'
+      return {
+        haloRadius: 17, // ~1.7x bulb radius
+        gradientId: 'draw-bulb-halo-dim',
+        opacity: 0.4, // faint orange halo
+        className: 'bulb-halo-dim',
+        coreFill: '#ffb74d',
+        coreStroke: '#ffa726',
+        filamentStroke: '#18345f',
+      }
     case 'overload':
-      return '#EF5350'
+      return {
+        haloRadius: 23, // ~2.3x bulb radius
+        gradientId: 'draw-bulb-halo-overload',
+        opacity: 0.75, // red halo
+        className: 'bulb-halo-overload',
+        coreFill: '#ef5350',
+        coreStroke: '#d32f2f',
+        filamentStroke: '#ffffff',
+      }
     default:
-      return 'transparent'
+      return null
   }
 }
 
@@ -62,7 +104,7 @@ interface CompDrawProps {
   c2: number
   isSelected?: boolean
   isSuspect?: boolean
-  glow?: string
+  state?: string
 }
 
 /** Render a battery symbol (two parallel lines perpendicular to wire direction). */
@@ -101,8 +143,8 @@ function Battery({ r1, c1, r2, c2, isSelected }: CompDrawProps) {
   )
 }
 
-/** Render a bulb (circle with cross) with optional glow. */
-function Bulb({ r1, c1, r2, c2, isSelected, glow }: CompDrawProps) {
+/** Render a bulb (circle with cross) with soft radial halo and warm core when lit. */
+function Bulb({ r1, c1, r2, c2, isSelected, state }: CompDrawProps) {
   const a = pt(r1, c1)
   const b = pt(r2, c2)
   const m = mid(r1, c1, r2, c2)
@@ -117,19 +159,75 @@ function Bulb({ r1, c1, r2, c2, isSelected, glow }: CompDrawProps) {
     : { x1: m.x, y1: m.y + R, x2: b.x, y2: b.y }
 
   const cr = R * 0.6
-  const hasGlow = glow && glow !== 'transparent'
-  const stroke = isSelected ? '#FFD54F' : (hasGlow ? glow : 'var(--clr-accent, #4FC3F7)')
+  const haloConfig = getDrawBulbRenderConfig(state)
+  const isLit = haloConfig !== null
+
+  const wireStroke = isSelected ? '#FFD54F' : 'var(--clr-accent, #4FC3F7)'
+  const coreFill = isLit ? haloConfig.coreFill : '#ffffff'
+  const coreStroke = isSelected
+    ? '#FFD54F'
+    : isLit
+      ? haloConfig.coreStroke
+      : 'var(--clr-accent, #4FC3F7)'
+  const filamentStroke = isSelected
+    ? '#FFD54F'
+    : isLit
+      ? haloConfig.filamentStroke
+      : 'var(--clr-accent, #4FC3F7)'
 
   return (
-    <g stroke={stroke} strokeWidth={2} fill="none">
-      {hasGlow && (
-        <circle cx={m.x} cy={m.y} r={R + 8} fill={glow} opacity={0.3} stroke="none" />
+    <g strokeWidth={2} fill="none">
+      {/* Soft outer halo with breathing pulse */}
+      {haloConfig && (
+        <g transform={`translate(${m.x}, ${m.y})`}>
+          <circle
+            cx={0}
+            cy={0}
+            r={haloConfig.haloRadius}
+            fill={`url(#${haloConfig.gradientId})`}
+            className={haloConfig.className}
+            opacity={haloConfig.opacity}
+            stroke="none"
+            pointerEvents="none"
+          />
+        </g>
       )}
-      <line {...wireA} />
-      <line {...wireB} />
-      <circle cx={m.x} cy={m.y} r={R} fill={hasGlow ? `${glow}44` : 'none'} />
-      <line x1={m.x - cr} y1={m.y - cr} x2={m.x + cr} y2={m.y + cr} />
-      <line x1={m.x + cr} y1={m.y - cr} x2={m.x - cr} y2={m.y + cr} />
+
+      {/* Wire leads connecting to bulb edge */}
+      <line {...wireA} stroke={wireStroke} />
+      <line {...wireB} stroke={wireStroke} />
+
+      {/* Bulb core circle */}
+      <circle
+        cx={m.x}
+        cy={m.y}
+        r={R}
+        fill={coreFill}
+        stroke={coreStroke}
+      />
+
+      {/* Bright state subtle central shine */}
+      {state === 'bright' && (
+        <circle cx={m.x} cy={m.y} r={R * 0.45} fill="#ffffff" opacity={0.45} stroke="none" pointerEvents="none" />
+      )}
+
+      {/* Filament cross lines */}
+      <line
+        x1={m.x - cr}
+        y1={m.y - cr}
+        x2={m.x + cr}
+        y2={m.y + cr}
+        stroke={filamentStroke}
+        strokeWidth={isLit ? 2.4 : 2}
+      />
+      <line
+        x1={m.x + cr}
+        y1={m.y - cr}
+        x2={m.x - cr}
+        y2={m.y + cr}
+        stroke={filamentStroke}
+        strokeWidth={isLit ? 2.4 : 2}
+      />
     </g>
   )
 }
@@ -293,6 +391,107 @@ export default function CircuitSVG({
       aria-label="Interpreted circuit diagram"
       role="img"
     >
+      <defs>
+        {/* Normal: warm yellow gradient (yellow → transparent) */}
+        <radialGradient id="draw-bulb-halo-normal" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ffd54a" stopOpacity="1" />
+          <stop offset="45%" stopColor="#ffd54a" stopOpacity="0.7" />
+          <stop offset="75%" stopColor="#ffb300" stopOpacity="0.3" />
+          <stop offset="100%" stopColor="#ffd54a" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Bright: stronger/larger brilliant yellow gradient */}
+        <radialGradient id="draw-bulb-halo-bright" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#fff9c4" stopOpacity="1" />
+          <stop offset="35%" stopColor="#ffd54a" stopOpacity="0.88" />
+          <stop offset="70%" stopColor="#ffc107" stopOpacity="0.38" />
+          <stop offset="100%" stopColor="#ffd54a" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Dim: faint orange gradient */}
+        <radialGradient id="draw-bulb-halo-dim" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ff9800" stopOpacity="0.75" />
+          <stop offset="50%" stopColor="#ff8a65" stopOpacity="0.35" />
+          <stop offset="85%" stopColor="#e2672e" stopOpacity="0.1" />
+          <stop offset="100%" stopColor="#e2672e" stopOpacity="0" />
+        </radialGradient>
+
+        {/* Overload: red gradient */}
+        <radialGradient id="draw-bulb-halo-overload" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="#ff5252" stopOpacity="1" />
+          <stop offset="50%" stopColor="#ef5350" stopOpacity="0.65" />
+          <stop offset="80%" stopColor="#d32f2f" stopOpacity="0.25" />
+          <stop offset="100%" stopColor="#b71c1c" stopOpacity="0" />
+        </radialGradient>
+      </defs>
+
+      <style>{`
+        @keyframes bulb-halo-breathe-normal {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 0.65;
+          }
+          50% {
+            transform: scale(1.15);
+            opacity: 0.85;
+          }
+        }
+        @keyframes bulb-halo-breathe-bright {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 0.8;
+          }
+          50% {
+            transform: scale(1.22);
+            opacity: 0.98;
+          }
+        }
+        @keyframes bulb-halo-breathe-dim {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 0.35;
+          }
+          50% {
+            transform: scale(1.1);
+            opacity: 0.5;
+          }
+        }
+        @keyframes bulb-halo-breathe-overload {
+          0%, 100% {
+            transform: scale(1);
+            opacity: 0.8;
+          }
+          50% {
+            transform: scale(1.1);
+            opacity: 0.45;
+          }
+        }
+        .bulb-halo-normal {
+          animation: bulb-halo-breathe-normal 2.4s ease-in-out infinite;
+          transform-origin: 0 0;
+        }
+        .bulb-halo-bright {
+          animation: bulb-halo-breathe-bright 2.0s ease-in-out infinite;
+          transform-origin: 0 0;
+        }
+        .bulb-halo-dim {
+          animation: bulb-halo-breathe-dim 2.8s ease-in-out infinite;
+          transform-origin: 0 0;
+        }
+        .bulb-halo-overload {
+          animation: bulb-halo-breathe-overload 0.5s ease-in-out infinite;
+          transform-origin: 0 0;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .bulb-halo-normal,
+          .bulb-halo-bright,
+          .bulb-halo-dim,
+          .bulb-halo-overload {
+            animation: none !important;
+            transform: none !important;
+          }
+        }
+      `}</style>
       {/* Open wire slots between adjacent dots — Tap to add wire */}
       {openSlots.map(({ p1, p2 }) => {
         const a = pt(p1.row, p1.col)
@@ -383,7 +582,6 @@ export default function CircuitSVG({
         const isSelected = selectedId === c.id
         const isSuspect = Boolean(suspectWireIds?.includes(c.id))
         const state = bulbStateMap.get(c.id)
-        const glow = bulbGlowColor(state)
         const a = pt(r1, c1)
         const b = pt(r2, c2)
 
@@ -394,7 +592,7 @@ export default function CircuitSVG({
           c2,
           isSelected,
           isSuspect,
-          glow,
+          state,
         }
 
         let symbolNode = null
