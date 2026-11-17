@@ -2,22 +2,24 @@ import type { ComponentType } from '../contracts/netlist'
 
 // Clip names and English fallback text for speechSynthesis, until recorded audio ships under
 // public/audio/<lang>/<name>.mp3. Keep names stable — the recorded clips will reuse them.
+// Every clip here (plus the pos_r*c* family, templated) is also listed in clips.csv.
 export const CLIPS = {
   welcome: 'Sparsh mode. Build a circuit by touch and sound.',
   talkback_hint:
-    'Swipe to move. Double tap to place or edit a part. Long press for a summary. Two finger tap to run. Two finger double tap for a guided lesson.',
-  grid_intro: 'This is a 5 by 5 grid. You are at row 1, column 1.',
-  edge: "You're at the edge.",
+    'One finger: swipe to move, tap to choose a part, then swipe to place it. Two fingers: tap to run, hold for a summary. Three finger tap any time for full help.',
+  grid_intro: 'This is a 5 by 5 grid. You are at row 1, column 1. Three finger tap any time for help.',
+  edge: 'Edge of the grid.',
   empty: 'empty',
-  menu_open: 'Choose a part. Swipe to hear your choices. Double tap to pick.',
   battery: 'battery',
   bulb: 'bulb',
   resistor: 'resistor',
   switch: 'switch',
   wire: 'wire',
-  wire_direction: 'Now swipe the direction to place it.',
-  placed: 'placed',
-  removed: 'removed',
+  swipe_destination: 'Swipe where it should go.',
+  placed: 'Placed',
+  removed: 'Removed',
+  cancelled: 'Cancelled.',
+  segment_occupied: "There's already something there.",
   switch_open: 'switch, open',
   switch_closed: 'switch, closed',
   your_circuit_has: 'Your circuit has',
@@ -33,49 +35,58 @@ export const CLIPS = {
   short_circuit: 'short circuit. Remove a wire and try again.',
   open_circuit: 'this circuit is not closed yet.',
   nothing_to_run: 'add a battery and a part before running.',
+  help:
+    'One finger: swipe to move. Tap once to repeat where you are. Double tap for wire. Triple tap for bulb. ' +
+    'Four taps for resistor. Hold for battery. Tap, then hold, for switch. After choosing a part, swipe to ' +
+    'place it; tap once to cancel. Two fingers: tap to run or stop. Hold for a summary. Swipe down to remove ' +
+    'the part here. Swipe up to toggle a switch here. Double tap for the guided lesson. Swipe left for home. ' +
+    'Three finger tap to hear this again.',
   n1: 'one',
   n2: 'two',
   n3: 'three',
   n4: 'four',
   n5: 'five',
-  pos_r1c1: 'row 1, column 1',
-  pos_r1c2: 'row 1, column 2',
-  pos_r1c3: 'row 1, column 3',
-  pos_r1c4: 'row 1, column 4',
-  pos_r1c5: 'row 1, column 5',
-  pos_r2c1: 'row 2, column 1',
-  pos_r2c2: 'row 2, column 2',
-  pos_r2c3: 'row 2, column 3',
-  pos_r2c4: 'row 2, column 4',
-  pos_r2c5: 'row 2, column 5',
-  pos_r3c1: 'row 3, column 1',
-  pos_r3c2: 'row 3, column 2',
-  pos_r3c3: 'row 3, column 3',
-  pos_r3c4: 'row 3, column 4',
-  pos_r3c5: 'row 3, column 5',
-  pos_r4c1: 'row 4, column 1',
-  pos_r4c2: 'row 4, column 2',
-  pos_r4c3: 'row 4, column 3',
-  pos_r4c4: 'row 4, column 4',
-  pos_r4c5: 'row 4, column 5',
-  pos_r5c1: 'row 5, column 1',
-  pos_r5c2: 'row 5, column 2',
-  pos_r5c3: 'row 5, column 3',
-  pos_r5c4: 'row 5, column 4',
-  pos_r5c5: 'row 5, column 5',
+  pos_r1c1: 'Row 1, column 1.',
+  pos_r1c2: 'Row 1, column 2.',
+  pos_r1c3: 'Row 1, column 3.',
+  pos_r1c4: 'Row 1, column 4.',
+  pos_r1c5: 'Row 1, column 5.',
+  pos_r2c1: 'Row 2, column 1.',
+  pos_r2c2: 'Row 2, column 2.',
+  pos_r2c3: 'Row 2, column 3.',
+  pos_r2c4: 'Row 2, column 4.',
+  pos_r2c5: 'Row 2, column 5.',
+  pos_r3c1: 'Row 3, column 1.',
+  pos_r3c2: 'Row 3, column 2.',
+  pos_r3c3: 'Row 3, column 3.',
+  pos_r3c4: 'Row 3, column 4.',
+  pos_r3c5: 'Row 3, column 5.',
+  pos_r4c1: 'Row 4, column 1.',
+  pos_r4c2: 'Row 4, column 2.',
+  pos_r4c3: 'Row 4, column 3.',
+  pos_r4c4: 'Row 4, column 4.',
+  pos_r4c5: 'Row 4, column 5.',
+  pos_r5c1: 'Row 5, column 1.',
+  pos_r5c2: 'Row 5, column 2.',
+  pos_r5c3: 'Row 5, column 3.',
+  pos_r5c4: 'Row 5, column 4.',
+  pos_r5c5: 'Row 5, column 5.',
 
   // Phase 3: guided lesson (1 battery, 2 bulbs — build in series, run, rebuild in parallel).
-  lesson_intro: "Let's build your first circuit together. I'll guide you, one step at a time.",
-  lesson_step_battery: 'First, place a battery.',
-  lesson_step_bulb1: 'Now add a bulb next to it.',
-  lesson_step_bulb2: 'Now add another bulb.',
-  lesson_step_close_loop: 'Now connect a wire to close the loop.',
+  // Phase 4 reworded the step instructions to the new tap/hold scheme; the step-detection logic
+  // (which netlist shape counts as "done") is unchanged.
+  lesson_intro: "Let's build your first circuit together. I'll guide you, one tap at a time.",
+  lesson_step_battery: 'First, place a battery. Tap and hold anywhere, then swipe where it should go.',
+  lesson_step_bulb1: 'Now add a bulb. Triple tap, then swipe where it should go.',
+  lesson_step_bulb2: 'Now add another bulb. Triple tap, then swipe where it should go.',
+  lesson_step_close_loop: 'Now close the loop with a wire. Double tap, then swipe to place it.',
   lesson_good: 'Good.',
-  lesson_series_ready: "Your circuit is ready. Two finger tap to run it and listen.",
+  lesson_series_ready: 'Your circuit is ready. Two finger tap to run it and listen.',
   lesson_series_result:
     "That's the hum of two bulbs in series. Two finger tap again when you're ready to rebuild it in parallel.",
   lesson_parallel_intro:
-    'Now rebuild this in parallel. Move one bulb so it connects between the same two dots as the other bulb, then wire the loop closed again.',
+    'Now rebuild this in parallel. Two finger swipe down on a bulb to remove it, then use taps to add wires ' +
+    'and a second bulb so two bulbs connect between the same two points.',
   lesson_parallel_ready: 'Your parallel circuit is ready. Two finger tap to run it.',
   lesson_compare: 'Listen. In parallel, both bulbs shine at full brightness, and the hum is louder.',
   lesson_complete: 'You finished the guided lesson. Great work.',
@@ -102,4 +113,6 @@ export function partClipFor(type: ComponentType): ClipName {
   return type
 }
 
+// Iteration order for the parts summary (TWO_FINGER_HOLD). No longer a menu-cycling order —
+// that menu is gone in Phase 4 — just a stable order to report counts in.
 export const PART_MENU_ORDER: ComponentType[] = ['battery', 'bulb', 'resistor', 'switch', 'wire']
