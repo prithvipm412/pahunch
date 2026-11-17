@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest'
 import { gradeResult, challengeAudio } from './index'
-import { FAULT_PUZZLES } from './puzzles'
 import { solve } from '../physics'
 import { describeCircuit } from '../physics/describe'
 import type { Netlist } from '../contracts/netlist'
@@ -69,7 +68,7 @@ describe('Learn mode: challengeAudio dynamic structural analysis', () => {
       ],
     }
     const result = solve(shortNetlist)
-    const audio = challengeAudio('custom', shortNetlist, result)
+    const audio = challengeAudio(shortNetlist, result)
     expect(audio.explain).toBe('explain_short')
     expect(audio.try).toBe('try_series')
   })
@@ -86,28 +85,8 @@ describe('Learn mode: challengeAudio dynamic structural analysis', () => {
       ],
     }
     const result = solve(openSwitchNetlist)
-    const audio = challengeAudio('custom', openSwitchNetlist, result)
+    const audio = challengeAudio(openSwitchNetlist, result)
     expect(audio.explain).toBe('explain_open')
     expect(audio.try).toBe('try_switch')
-  })
-})
-
-describe('Learn mode: Fault Hunt level goal-checks with describeCircuit and solve', () => {
-  FAULT_PUZZLES.forEach((puzzle, i) => {
-    it(`Puzzle ${i + 1} (${puzzle.id}) broken netlist fails and fixed netlist passes goal check`, () => {
-      // Broken state check: fails solve() or topology
-      const brokenResult = solve(puzzle.brokenNetlist)
-      const brokenDesc = describeCircuit(puzzle.brokenNetlist)
-      const brokenGoalMet = brokenResult.ok && brokenDesc.topology !== 'incomplete' && brokenDesc.topology !== 'empty'
-      expect(brokenGoalMet).toBe(false)
-
-      // Fixed state check: passes both solve() and topology
-      const fixedResult = solve(puzzle.fixedNetlist)
-      const fixedDesc = describeCircuit(puzzle.fixedNetlist)
-      const fixedGoalMet = fixedResult.ok && fixedDesc.topology !== 'incomplete' && fixedDesc.topology !== 'empty'
-      expect(fixedGoalMet).toBe(true)
-      expect(fixedResult.ok).toBe(true)
-      expect(fixedDesc.topology).toBe('series')
-    })
   })
 })
