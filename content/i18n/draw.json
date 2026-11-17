@@ -1,0 +1,42 @@
+{
+  "en": {
+    "title": "Draw Mode",
+    "take_photo": "Take photo of circuit",
+    "hint_text": "Draw your circuit on paper, then photograph it. Pahunch will read it for you.",
+    "processing": "Preparing image…",
+    "scanning": "Reading your circuit…",
+    "photo_label": "Your photo",
+    "read_label": "What Pahunch read",
+    "parts_found": "Parts found",
+    "open_build": "Looks right → Open in Build mode",
+    "retake": "Retake",
+    "demo_banner": "Demo mode — no API key set. Showing a sample circuit.",
+    "error_retry": "Try again",
+    "error_retake": "Retake photo",
+    "blurry_msg": "Hold steady and try again",
+    "no_network": "No network. Use Build mode for now.",
+    "saved_offline": "Saved — will send when online",
+    "queue_badge": "queued",
+    "queue_sending": "Sending saved circuits…"
+  },
+  "kn": {
+    "title": "ಚಿತ್ರ ಮೋಡ್",
+    "take_photo": "ಸರ್ಕ್ಯೂಟ್ ಫೋಟೋ ತೆಗೆಯಿರಿ",
+    "hint_text": "ಕಾಗದದ ಮೇಲೆ ಸರ್ಕ್ಯೂಟ್ ಬಿಡಿಸಿ, ನಂತರ ಫೋಟೋ ತೆಗೆಯಿರಿ. ಪಾಹುಂಚ್ ಓದುತ್ತದೆ.",
+    "processing": "ಚಿತ್ರ ಸಿದ್ಧಪಡಿಸಲಾಗುತ್ತಿದೆ…",
+    "scanning": "ನಿಮ್ಮ ಸರ್ಕ್ಯೂಟ್ ಓದಲಾಗುತ್ತಿದೆ…",
+    "photo_label": "ನಿಮ್ಮ ಫೋಟೋ",
+    "read_label": "ಪಾಹುಂಚ್ ಓದಿದ್ದು",
+    "parts_found": "ಸಿಕ್ಕ ಭಾಗಗಳು",
+    "open_build": "ಸರಿ ಕಾಣಿಸುತ್ತಿದೆ → ಬಿಲ್ಡ್ ಮೋಡ್‌ನಲ್ಲಿ ತೆರೆಯಿರಿ",
+    "retake": "ಮತ್ತೆ ತೆಗೆಯಿರಿ",
+    "demo_banner": "ಡೆಮೊ ಮೋಡ್ — API ಕೀ ಇಲ್ಲ. ಮಾದರಿ ಸರ್ಕ್ಯೂಟ್ ತೋರಿಸಲಾಗುತ್ತಿದೆ.",
+    "error_retry": "ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    "error_retake": "ಮತ್ತೆ ಫೋಟೋ ತೆಗೆಯಿರಿ",
+    "blurry_msg": "ಸ್ಥಿರವಾಗಿ ಹಿಡಿದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ",
+    "no_network": "ನೆಟ್‌ವರ್ಕ್ ಇಲ್ಲ. ಈಗ ಬಿಲ್ಡ್ ಮೋಡ್ ಬಳಸಿ.",
+    "saved_offline": "ಉಳಿಸಲಾಗಿದೆ — ಆನ್‌ಲೈನ್ ಆದಾಗ ಕಳುಹಿಸಲಾಗುತ್ತದೆ",
+    "queue_badge": "ಕ್ಯೂನಲ್ಲಿ",
+    "queue_sending": "ಉಳಿಸಿದ ಸರ್ಕ್ಯೂಟ್‌ಗಳನ್ನು ಕಳುಹಿಸಲಾಗುತ್ತಿದೆ…"
+  }
+}
