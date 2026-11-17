@@ -5,28 +5,32 @@ import { solve } from '../physics'
 import { getAudioGeneration, isAudioGenerationCurrent, playSequence, sonify, stopAll, stopSonify, vibrate } from '../audio'
 import { useLanguage } from '../app/lang'
 import { fallbackFor } from './clips'
-import { classifySwipe, isPairedTap, pointFromClient } from './gestures'
+import { classifySwipe, isEdgeStart, isPairedTap, pointFromClient, resolveFingerClass } from './gestures'
 import { createInitialState, sparshReducer, type SparshEffect, type SparshEvent, type SparshState } from './machine'
 import './sparsh.css'
 
-const SWIPE_THRESHOLD = 26
-const TWO_FINGER_SWIPE_THRESHOLD = 50
-const TAP_MOVE_THRESHOLD = 18
+// A single movement threshold for every swipe, 1-, 2-, or 3-finger alike.
+const MOVEMENT_THRESHOLD = 40
 const TAP_COUNT_WINDOW_MS = 350
 const DOUBLE_TAP_WINDOW_MS = 350
 const DOUBLE_TAP_MAX_DIST = 44
 const HOLD_MS = 600
 const REST_MS = 500
 const TAP_MAX_DURATION_MS = 500
+// Android's system back-gesture zone, left and right edge of the screen.
+const EDGE_ZONE_PX = 24
 
 interface GestureTracker {
-  fingerCount: number
-  moved: boolean
-  swipeDispatched: boolean
-  holdFired: boolean
+  active: boolean // from the first finger touching down until the last one lifts
+  committedClass: number // 0 (no gesture yet), else the gesture's finger count, 1-3 — only ever increases during a gesture
+  fingerSamples: number[] // touches.length at every touchstart/move/end this gesture, for resolveFingerClass
   startX: number
   startY: number
   startTime: number
+  moved: boolean
+  swipeDispatched: boolean
+  holdFired: boolean
+  edgeIgnored: boolean // this gesture started inside the system-back-gesture zone
   holdTimer: number | null
   tapFinalizeTimer: number | null
   restTimer: number | null
@@ -38,13 +42,16 @@ interface GestureTracker {
 
 function createGestureTracker(): GestureTracker {
   return {
-    fingerCount: 0,
-    moved: false,
-    swipeDispatched: false,
-    holdFired: false,
+    active: false,
+    committedClass: 0,
+    fingerSamples: [],
     startX: 0,
     startY: 0,
     startTime: 0,
+    moved: false,
+    swipeDispatched: false,
+    holdFired: false,
+    edgeIgnored: false,
     holdTimer: null,
     tapFinalizeTimer: null,
     restTimer: null,
@@ -57,6 +64,16 @@ function createGestureTracker(): GestureTracker {
 
 function pointsEqual(a: GridPoint, b: GridPoint): boolean {
   return a.row === b.row && a.col === b.col
+}
+
+function midpoint(touches: React.TouchList): { x: number; y: number } {
+  let x = 0
+  let y = 0
+  for (let i = 0; i < touches.length; i++) {
+    x += touches[i].clientX
+    y += touches[i].clientY
+  }
+  return { x: x / touches.length, y: y / touches.length }
 }
 
 export default function SparshScreen() {
@@ -106,6 +123,23 @@ export default function SparshScreen() {
     },
     [runEffects],
   )
+
+  // The popstate listener below is installed once, on mount, so it must read the latest
+  // `dispatch` through a ref rather than closing over a possibly-stale one.
+  const dispatchRef = useRef(dispatch)
+  dispatchRef.current = dispatch
+
+  useEffect(() => {
+    window.history.pushState({ sparshGuard: true }, '')
+    const onPopState = () => {
+      // Cancel the back navigation by immediately pushing another entry, and explain how to
+      // actually leave instead.
+      window.history.pushState({ sparshGuard: true }, '')
+      dispatchRef.current({ type: 'BACK_INTERCEPTED' })
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   const clearHoldTimer = () => {
     const g = gestureRef.current
@@ -165,6 +199,47 @@ export default function SparshScreen() {
     gestureRef.current.restTimer = window.setTimeout(() => dispatch({ type: 'REST', point }), REST_MS)
   }
 
+  // Commits the gesture to a (higher) finger class — called the moment resolveFingerClass says
+  // more fingers have touched down than we'd committed to so far. Starts whatever timer that
+  // class needs, using the *current* touch positions (not the original 1-finger start), since a
+  // 2- or 3-finger gesture's "start" is from the moment all its fingers are down.
+  const commitClass = (cls: number, touches: React.TouchList) => {
+    const g = gestureRef.current
+    clearHoldTimer()
+    if (g.committedClass === 1 && cls >= 2) {
+      // Upgrading away from a 1-finger gesture abandons any one-finger tap count in progress.
+      clearTapFinalizeTimer()
+      dispatch({ type: 'TAP_RESET' })
+    }
+    g.committedClass = cls
+    if (cls === 1) {
+      const t = touches[0]
+      g.startX = t.clientX
+      g.startY = t.clientY
+      g.holdTimer = window.setTimeout(() => {
+        if (!g.moved) {
+          g.holdFired = true
+          dispatch({ type: 'HOLD' })
+        }
+      }, HOLD_MS)
+    } else if (cls === 2) {
+      const mid = midpoint(touches)
+      g.startX = mid.x
+      g.startY = mid.y
+      g.holdTimer = window.setTimeout(() => {
+        if (!g.moved) {
+          g.holdFired = true
+          dispatch({ type: 'TWO_FINGER_HOLD' })
+        }
+      }, HOLD_MS)
+    } else {
+      const mid = midpoint(touches)
+      g.startX = mid.x
+      g.startY = mid.y
+      // 3 fingers: no hold gesture is defined, nothing further to start.
+    }
+  }
+
   const handleUnlock = () => {
     setUnlocked(true)
     dispatch({ type: 'INIT' })
@@ -172,67 +247,49 @@ export default function SparshScreen() {
 
   const onTouchStart = (e: React.TouchEvent) => {
     const g = gestureRef.current
-    clearHoldTimer()
-
-    g.fingerCount = e.touches.length
-    g.moved = false
-    g.swipeDispatched = false
-    g.holdFired = false
-    g.startTime = Date.now()
-
-    if (g.fingerCount >= 3) return // resolved entirely on touchend
-
-    if (g.fingerCount === 2) {
-      // A different finger pattern abandons any one-finger tap count in progress.
-      clearTapFinalizeTimer()
-      dispatch({ type: 'TAP_RESET' })
-      const [a, b] = [e.touches[0], e.touches[1]]
-      g.startX = (a.clientX + b.clientX) / 2
-      g.startY = (a.clientY + b.clientY) / 2
-      g.holdTimer = window.setTimeout(() => {
-        if (!g.moved) {
-          g.holdFired = true
-          dispatch({ type: 'TWO_FINGER_HOLD' })
-        }
-      }, HOLD_MS)
-      return
+    if (!g.active) {
+      g.active = true
+      g.fingerSamples = []
+      g.committedClass = 0
+      g.moved = false
+      g.swipeDispatched = false
+      g.holdFired = false
+      g.startTime = Date.now()
+      const t = e.touches[0]
+      g.edgeIgnored = isEdgeStart(t.clientX, window.innerWidth, EDGE_ZONE_PX)
     }
-
-    // One finger. Pause (don't reset) the tap-finalize countdown while this press is being
-    // evaluated — otherwise a legitimate "tap, then hold" would have its tap finalized out from
-    // under it before the hold had a chance to fire.
-    clearTapFinalizeTimer()
-    const t = e.touches[0]
-    g.startX = t.clientX
-    g.startY = t.clientY
-    g.holdTimer = window.setTimeout(() => {
-      if (!g.moved) {
-        g.holdFired = true
-        dispatch({ type: 'HOLD' })
-      }
-    }, HOLD_MS)
+    g.fingerSamples.push(e.touches.length)
+    const resolved = resolveFingerClass(g.fingerSamples)
+    if (resolved > g.committedClass) commitClass(resolved, e.touches)
   }
 
   const onTouchMove = (e: React.TouchEvent) => {
     const g = gestureRef.current
-    if (g.fingerCount >= 3) return
+    if (!g.active) return
 
-    if (g.fingerCount === 2) {
+    g.fingerSamples.push(e.touches.length)
+    const resolved = resolveFingerClass(g.fingerSamples)
+    if (resolved > g.committedClass) commitClass(resolved, e.touches)
+
+    if (g.committedClass === 3) return // no movement handling for a 3-finger gesture
+
+    if (g.committedClass === 2) {
       if (e.touches.length < 2) return
-      const [a, b] = [e.touches[0], e.touches[1]]
-      const x = (a.clientX + b.clientX) / 2
-      const y = (a.clientY + b.clientY) / 2
-      const dx = x - g.startX
-      const dy = y - g.startY
-      if (!g.moved && Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD) {
+      const mid = midpoint(e.touches)
+      const dx = mid.x - g.startX
+      const dy = mid.y - g.startY
+      if (!g.moved && Math.hypot(dx, dy) > MOVEMENT_THRESHOLD) {
         g.moved = true
         clearHoldTimer()
       }
-      if (!g.swipeDispatched) {
-        const direction = classifySwipe(dx, dy, TWO_FINGER_SWIPE_THRESHOLD)
+      if (!g.swipeDispatched && !g.edgeIgnored) {
+        const direction = classifySwipe(dx, dy, MOVEMENT_THRESHOLD)
         if (direction === 'left') {
           g.swipeDispatched = true
-          dispatch({ type: 'TWO_FINGER_SWIPE_LEFT' })
+          dispatch({ type: 'TWO_FINGER_SWIPE_LEFT', now: Date.now() })
+        } else if (direction === 'right') {
+          g.swipeDispatched = true
+          dispatch({ type: 'TWO_FINGER_SWIPE_RIGHT' })
         } else if (direction === 'down') {
           g.swipeDispatched = true
           dispatch({ type: 'TWO_FINGER_SWIPE_DOWN' })
@@ -240,16 +297,15 @@ export default function SparshScreen() {
           g.swipeDispatched = true
           dispatch({ type: 'TWO_FINGER_SWIPE_UP' })
         }
-        // 'right': no two-finger-swipe-right gesture is defined — ignore it.
       }
       return
     }
 
-    // One finger.
+    // committedClass === 1
     const t = e.touches[0]
     const dx = t.clientX - g.startX
     const dy = t.clientY - g.startY
-    if (!g.moved && Math.hypot(dx, dy) > TAP_MOVE_THRESHOLD) {
+    if (!g.moved && Math.hypot(dx, dy) > MOVEMENT_THRESHOLD) {
       g.moved = true
       clearHoldTimer()
       clearTapFinalizeTimer()
@@ -266,8 +322,8 @@ export default function SparshScreen() {
       return
     }
 
-    if (!g.swipeDispatched) {
-      const direction = classifySwipe(dx, dy, SWIPE_THRESHOLD)
+    if (!g.swipeDispatched && !g.edgeIgnored) {
+      const direction = classifySwipe(dx, dy, MOVEMENT_THRESHOLD)
       if (direction) {
         g.swipeDispatched = true
         dispatch({ type: 'SWIPE', direction })
@@ -277,54 +333,63 @@ export default function SparshScreen() {
 
   const onTouchEnd = (e: React.TouchEvent) => {
     const g = gestureRef.current
+    if (!g.active) return
     clearHoldTimer()
 
-    if (g.fingerCount >= 3) {
-      if (e.touches.length === 0 && !g.moved && Date.now() - g.startTime < TAP_MAX_DURATION_MS) {
+    g.fingerSamples.push(e.touches.length)
+    const resolved = resolveFingerClass(g.fingerSamples)
+    if (resolved > g.committedClass) commitClass(resolved, e.touches)
+
+    if (e.touches.length > 0) return // more fingers still down — not the end of the gesture yet
+
+    // Last finger lifted. Classify the WHOLE gesture now, using the maximum finger count it
+    // ever had — never using whatever the count happened to be at any single instant.
+    g.active = false
+
+    if (g.committedClass === 3) {
+      if (!g.moved && Date.now() - g.startTime < TAP_MAX_DURATION_MS) {
         dispatch({ type: 'THREE_FINGER_TAP' })
       }
       return
     }
 
-    if (g.fingerCount === 2) {
-      if (e.touches.length === 0 && !g.holdFired && !g.swipeDispatched && Date.now() - g.startTime < TAP_MAX_DURATION_MS) {
-        const now = Date.now()
-        if (
-          isPairedTap(
-            now,
-            g.lastTwoFingerTapTime,
-            g.lastTwoFingerTapX,
-            g.lastTwoFingerTapY,
-            g.startX,
-            g.startY,
-            DOUBLE_TAP_WINDOW_MS,
-            DOUBLE_TAP_MAX_DIST,
-          )
-        ) {
-          clearPendingTwoFingerTapTimer()
-          g.lastTwoFingerTapTime = 0
-          dispatch({ type: 'TWO_FINGER_DOUBLE_TAP' })
-        } else {
-          // Defer the single tap until the window closes, in case a second tap pairs with it —
-          // otherwise the double-tap would fire the single-tap action (run/explore-toggle) too.
-          g.lastTwoFingerTapTime = now
-          g.lastTwoFingerTapX = g.startX
-          g.lastTwoFingerTapY = g.startY
-          g.pendingTwoFingerTapTimer = window.setTimeout(() => {
-            g.pendingTwoFingerTapTimer = null
-            dispatch({ type: 'TWO_FINGER_TAP' })
-          }, DOUBLE_TAP_WINDOW_MS)
-        }
+    if (g.committedClass === 2) {
+      if (g.holdFired || g.swipeDispatched || Date.now() - g.startTime >= TAP_MAX_DURATION_MS) return
+      const now = Date.now()
+      if (
+        isPairedTap(
+          now,
+          g.lastTwoFingerTapTime,
+          g.lastTwoFingerTapX,
+          g.lastTwoFingerTapY,
+          g.startX,
+          g.startY,
+          DOUBLE_TAP_WINDOW_MS,
+          DOUBLE_TAP_MAX_DIST,
+        )
+      ) {
+        clearPendingTwoFingerTapTimer()
+        g.lastTwoFingerTapTime = 0
+        dispatch({ type: 'TWO_FINGER_DOUBLE_TAP' })
+      } else {
+        // Defer the single tap until the window closes, in case a second tap pairs with it —
+        // otherwise the double-tap would fire the single-tap action (run/explore-toggle) too.
+        g.lastTwoFingerTapTime = now
+        g.lastTwoFingerTapX = g.startX
+        g.lastTwoFingerTapY = g.startY
+        g.pendingTwoFingerTapTimer = window.setTimeout(() => {
+          g.pendingTwoFingerTapTimer = null
+          dispatch({ type: 'TWO_FINGER_TAP' })
+        }, DOUBLE_TAP_WINDOW_MS)
       }
       return
     }
 
-    // One finger.
+    // committedClass === 1
     if (stateRef.current.mode === 'explore') {
       clearRestTimer()
       return
     }
-
     if (g.holdFired) return // HOLD already dispatched; this lift is not also a tap
     if (g.moved) return // movement already dispatched TAP_RESET (and maybe a SWIPE)
 
@@ -336,6 +401,8 @@ export default function SparshScreen() {
   }
 
   const onTouchCancel = () => {
+    const g = gestureRef.current
+    g.active = false
     clearHoldTimer()
     clearRestTimer()
     clearTapFinalizeTimer()

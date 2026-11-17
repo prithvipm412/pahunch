@@ -24,6 +24,22 @@ export function isPairedTap(
   return now - lastTime < windowMs && Math.hypot(x - lastX, y - lastY) < maxDistance
 }
 
+// The finger count a whole gesture should be classified as, given every touches.length sample
+// observed from the first finger touching down to the last one lifting. Using the maximum
+// (capped at 3, since no gesture uses more) means a finger that joins a little late still
+// promotes the gesture to 2 (or 3) fingers, instead of the gesture being read as whatever the
+// finger count happened to be at the instant it's checked.
+export function resolveFingerClass(samples: number[]): number {
+  return Math.min(Math.max(0, ...samples), 3)
+}
+
+// True if a gesture starting at `x` (in viewport pixels) begins inside the Android
+// system-back-gesture zone at either screen edge, where our own swipe handling should stay out
+// of the way and dispatch nothing.
+export function isEdgeStart(x: number, screenWidth: number, zonePx: number): boolean {
+  return x < zonePx || x > screenWidth - zonePx
+}
+
 export interface Rect {
   left: number
   top: number

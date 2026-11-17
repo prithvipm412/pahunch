@@ -15,6 +15,25 @@ function tapCount(state: SparshState, count: number) {
   return sparshReducer(s, { type: 'TAP_FINALIZE' })
 }
 
+// Chooses a part by tap count (2=wire, 3=bulb, 4=resistor) and places it in `direction`.
+function placePartHere(state: SparshState, count: number, direction: Direction): SparshState {
+  const chosen = tapCount(state, count).state
+  return step(chosen, { type: 'SWIPE', direction })
+}
+
+// Chooses battery (hold, no prior tap) and places it in `direction`.
+function placeBatteryHere(state: SparshState, direction: Direction): SparshState {
+  const chosen = step(state, { type: 'HOLD' })
+  return step(chosen, { type: 'SWIPE', direction })
+}
+
+function runAndDispatchResult(state: SparshState) {
+  const solved = sparshReducer(state, { type: 'TWO_FINGER_TAP' })
+  expect(solved.effects).toEqual([{ type: 'solve' }])
+  const result = solve(solved.state.netlist)
+  return sparshReducer(solved.state, { type: 'SOLVE_RESULT', result })
+}
+
 describe('sparshReducer: entry', () => {
   it('INIT speaks welcome, hint, and grid intro', () => {
     const { effects } = sparshReducer(createInitialState(), { type: 'INIT' })
@@ -277,10 +296,173 @@ describe('sparshReducer: three-finger help', () => {
   })
 })
 
-describe('sparshReducer: two-finger swipe left', () => {
-  it('stops everything and navigates home regardless of mode', () => {
-    const { effects } = sparshReducer(createInitialState(), { type: 'TWO_FINGER_SWIPE_LEFT' })
+describe('sparshReducer: two-finger swipe left (exit, with confirmation)', () => {
+  it('the first swipe left only asks for confirmation — it does not leave', () => {
+    const { state, effects } = sparshReducer(createInitialState(), { type: 'TWO_FINGER_SWIPE_LEFT', now: 1000 })
+    expect(state.pendingExitAt).toBe(1000)
+    expect(effects).toEqual([{ type: 'speak', clips: ['exit_confirm'] }])
+  })
+
+  it('a second swipe left within 3 seconds confirms and leaves', () => {
+    const first = sparshReducer(createInitialState(), { type: 'TWO_FINGER_SWIPE_LEFT', now: 1000 })
+    const { state, effects } = sparshReducer(first.state, { type: 'TWO_FINGER_SWIPE_LEFT', now: 3999 })
+    expect(state.pendingExitAt).toBeNull()
     expect(effects).toEqual([{ type: 'stopAll' }, { type: 'navigateHome' }])
+  })
+
+  it('resets silently if the second swipe left comes more than 3 seconds later', () => {
+    const first = sparshReducer(createInitialState(), { type: 'TWO_FINGER_SWIPE_LEFT', now: 1000 })
+    const { state, effects } = sparshReducer(first.state, { type: 'TWO_FINGER_SWIPE_LEFT', now: 4001 })
+    // Not confirmed — treated as a fresh first swipe, asking for confirmation again.
+    expect(state.pendingExitAt).toBe(4001)
+    expect(effects).toEqual([{ type: 'speak', clips: ['exit_confirm'] }])
+  })
+
+  it('never moves the cursor', () => {
+    const start = createInitialState()
+    const { state } = sparshReducer(start, { type: 'TWO_FINGER_SWIPE_LEFT', now: 1000 })
+    expect(state.cursor).toEqual(start.cursor)
+  })
+})
+
+describe('sparshReducer: browser back interception', () => {
+  it('speaks the leave-hint and does not change state', () => {
+    const { state, effects } = sparshReducer(createInitialState(), { type: 'BACK_INTERCEPTED' })
+    expect(state).toEqual(createInitialState())
+    expect(effects).toEqual([{ type: 'speak', clips: ['exit_blocked_back'] }])
+  })
+})
+
+describe('sparshReducer: two-finger swipe right (undo)', () => {
+  function placeBulbAt00(state: SparshState) {
+    const chosen = tapCount(state, 3).state // bulb
+    return sparshReducer(chosen, { type: 'SWIPE', direction: 'right' }).state
+  }
+
+  it('says "Nothing to undo" when history is empty', () => {
+    const { effects } = sparshReducer(createInitialState(), { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(effects).toEqual([{ type: 'speak', clips: ['nothing_to_undo'] }])
+  })
+
+  it('undoes a placement: the part disappears and the cursor is restored', () => {
+    const placed = placeBulbAt00(createInitialState())
+    expect(placed.netlist.components).toHaveLength(1)
+    expect(placed.cursor).toEqual({ row: 0, col: 1 })
+
+    const { state, effects } = sparshReducer(placed, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(state.netlist.components).toHaveLength(0)
+    expect(state.cursor).toEqual({ row: 0, col: 0 })
+    expect(state.history).toHaveLength(0)
+    expect(effects).toEqual([
+      { type: 'speak', clips: ['undone', 'bulb', 'removed_suffix', 'pos_r1c1'] },
+      { type: 'vibrate', pattern: [15, 40, 15] },
+    ])
+  })
+
+  it('undoes a removal: the part comes back', () => {
+    const placed = placeBulbAt00(createInitialState())
+    const removed = sparshReducer(placed, { type: 'TWO_FINGER_SWIPE_DOWN' }).state
+    expect(removed.netlist.components).toHaveLength(0)
+
+    const { state, effects } = sparshReducer(removed, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(state.netlist.components).toEqual(placed.netlist.components)
+    expect(effects[0]).toEqual({ type: 'speak', clips: ['undone', 'bulb', 'is_back', 'pos_r1c2'] })
+  })
+
+  it('undoes a toggle: the switch reverts to its previous state', () => {
+    let state = createInitialState()
+    state = step(state, { type: 'TAP' })
+    state = step(state, { type: 'HOLD' }) // choose switch
+    state = step(state, { type: 'SWIPE', direction: 'right' }) // place switch (0,0)->(0,1), closed: false
+
+    const toggled = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_UP' })
+    expect(toggled.state.netlist.components[0]).toMatchObject({ closed: true })
+
+    const undone = sparshReducer(toggled.state, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(undone.state.netlist.components[0]).toMatchObject({ closed: false })
+    // The switch was placed from (0,0) to (0,1), which moved the cursor to (0,1); toggling
+    // doesn't move it, so that's where it still is before and after the undo.
+    expect(undone.effects[0]).toEqual({ type: 'speak', clips: ['undone', 'switch_open', 'pos_r1c2'] })
+  })
+
+  it('several undos in a row walk all the way back', () => {
+    let state = placeBulbAt00(createInitialState())
+    state = placePartHere(state, 4, 'down') // resistor, cursor advances
+
+    expect(state.netlist.components).toHaveLength(2)
+
+    const undoneOnce = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_RIGHT' }).state
+    expect(undoneOnce.netlist.components).toHaveLength(1)
+
+    const undoneTwice = sparshReducer(undoneOnce, { type: 'TWO_FINGER_SWIPE_RIGHT' }).state
+    expect(undoneTwice.netlist.components).toHaveLength(0)
+    expect(undoneTwice.history).toHaveLength(0)
+
+    const undoneThrice = sparshReducer(undoneTwice, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(undoneThrice.effects).toEqual([{ type: 'speak', clips: ['nothing_to_undo'] }])
+  })
+
+  it('caps history at 50 entries', () => {
+    let state = createInitialState()
+    // Lay 60 wires in a long zig-zag so every placement is legal (alternaccount for the fact
+    // that a straight line would run off a 5-wide grid quickly — zig-zag stays in bounds).
+    const directions: Array<'right' | 'down' | 'left' | 'up'> = ['right', 'down', 'left', 'down']
+    let di = 0
+    for (let i = 0; i < 60; i++) {
+      const chosen = step(state, { type: 'TAP' })
+      const withTap = step(chosen, { type: 'TAP' }) // 2 taps -> wire
+      const finalized = sparshReducer(withTap, { type: 'TAP_FINALIZE' }).state
+      const direction = directions[di % directions.length]
+      const placed = sparshReducer(finalized, { type: 'SWIPE', direction })
+      if (placed.effects.some((e) => e.type === 'speak' && e.clips.includes('edge'))) {
+        di++
+        continue
+      }
+      state = placed.state
+      di++
+    }
+    expect(state.history.length).toBeLessThanOrEqual(50)
+  })
+
+  it('while a part is chosen, undo only cancels the choice and leaves history untouched', () => {
+    const placed = placeBulbAt00(createInitialState())
+    const historyBefore = placed.history
+    const chosen = tapCount(placed, 2).state // wire
+
+    const { state, effects } = sparshReducer(chosen, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(state.buildSub).toEqual({ kind: 'idle' })
+    expect(state.history).toBe(historyBefore)
+    expect(state.netlist.components).toHaveLength(1) // the bulb is still there, untouched
+    expect(effects).toEqual([{ type: 'speak', clips: ['cancelled'] }])
+  })
+
+  it('in explore mode, undo first stops the run, then undoes', () => {
+    // A lone bulb has no battery and wouldn't actually solve ok — construct the "exploring"
+    // state directly (as other describe blocks in this file do) rather than needing a full
+    // buildable valid circuit just to exercise the mode-toggle-then-undo interaction.
+    const placed = placeBulbAt00(createInitialState())
+    const exploring: SparshState = {
+      ...placed,
+      mode: 'explore',
+      explore: { point: placed.cursor, overComponentId: null },
+      lastResult: { ok: true, errors: [], warnings: [], components: [] },
+    }
+
+    const { state, effects } = sparshReducer(exploring, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(state.mode).toBe('build')
+    expect(state.netlist.components).toHaveLength(0)
+    expect(effects[0]).toEqual({ type: 'sonifyStop' })
+    expect(effects[1]).toEqual({ type: 'speak', clips: ['undone', 'bulb', 'removed_suffix', 'pos_r1c1'] })
+  })
+
+  it('works during the guided lesson: undoing re-derives the current step from the netlist', () => {
+    let state = step(createInitialState(), { type: 'TWO_FINGER_DOUBLE_TAP' })
+    state = placeBatteryHere(state, 'right')
+    expect(state.lesson).toEqual({ phase: 'series', stepIndex: 1 })
+
+    const undone = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_RIGHT' })
+    expect(undone.state.netlist.components).toHaveLength(0)
+    expect(undone.state.lesson).toEqual({ phase: 'series', stepIndex: 0 })
   })
 })
 
@@ -347,23 +529,6 @@ describe('sparshReducer: two-finger tap (run / explore)', () => {
 })
 
 describe('sparshReducer: guided lesson', () => {
-  function placePartHere(state: SparshState, count: number, direction: Direction): SparshState {
-    const chosen = tapCount(state, count).state
-    return step(chosen, { type: 'SWIPE', direction })
-  }
-
-  function placeBatteryHere(state: SparshState, direction: Direction): SparshState {
-    const chosen = step(state, { type: 'HOLD' })
-    return step(chosen, { type: 'SWIPE', direction })
-  }
-
-  function runAndDispatchResult(state: SparshState) {
-    const solved = sparshReducer(state, { type: 'TWO_FINGER_TAP' })
-    expect(solved.effects).toEqual([{ type: 'solve' }])
-    const result = solve(solved.state.netlist)
-    return sparshReducer(solved.state, { type: 'SOLVE_RESULT', result })
-  }
-
   it('starts on a two-finger double-tap, clearing any existing build', () => {
     const built = placePartHere(createInitialState(), 2, 'right') // a wire
     expect(built.netlist.components).toHaveLength(1)

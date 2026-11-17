@@ -6,7 +6,7 @@ import type { ComponentType } from '../contracts/netlist'
 export const CLIPS = {
   welcome: 'Sparsh mode. Build a circuit by touch and sound.',
   talkback_hint:
-    'One finger: swipe to move, tap to choose a part, then swipe to place it. Two fingers: tap to run, hold for a summary. Three finger tap any time for full help.',
+    'One finger: swipe to move, tap to choose a part, then swipe to place it. Two fingers: tap to run, hold for a summary, swipe right to undo. Three finger tap any time for full help.',
   grid_intro: 'This is a 5 by 5 grid. You are at row 1, column 1. Three finger tap any time for help.',
   edge: 'Edge of the grid.',
   empty: 'empty',
@@ -20,8 +20,8 @@ export const CLIPS = {
   removed: 'Removed',
   cancelled: 'Cancelled.',
   segment_occupied: "There's already something there.",
-  switch_open: 'switch, open',
-  switch_closed: 'switch, closed',
+  switch_open: 'Switch open.',
+  switch_closed: 'Switch closed.',
   your_circuit_has: 'Your circuit has',
   in_series: 'connected in series',
   in_parallel: 'connected in parallel',
@@ -35,12 +35,18 @@ export const CLIPS = {
   short_circuit: 'short circuit. Remove a wire and try again.',
   open_circuit: 'this circuit is not closed yet.',
   nothing_to_run: 'add a battery and a part before running.',
+  undone: 'Undone.',
+  removed_suffix: 'removed.',
+  is_back: 'is back.',
+  nothing_to_undo: 'Nothing to undo.',
+  exit_confirm: 'Swipe left again to leave.',
+  exit_blocked_back: 'To leave, swipe left twice with two fingers.',
   help:
     'One finger: swipe to move. Tap once to repeat where you are. Double tap for wire. Triple tap for bulb. ' +
     'Four taps for resistor. Hold for battery. Tap, then hold, for switch. After choosing a part, swipe to ' +
     'place it; tap once to cancel. Two fingers: tap to run or stop. Hold for a summary. Swipe down to remove ' +
-    'the part here. Swipe up to toggle a switch here. Double tap for the guided lesson. Swipe left for home. ' +
-    'Three finger tap to hear this again.',
+    'the part here. Swipe up to toggle a switch here. Swipe right to undo. Double tap for the guided lesson. ' +
+    'Swipe left twice to leave. Three finger tap to hear this again.',
   n1: 'one',
   n2: 'two',
   n3: 'three',
@@ -75,7 +81,9 @@ export const CLIPS = {
   // Phase 3: guided lesson (1 battery, 2 bulbs — build in series, run, rebuild in parallel).
   // Phase 4 reworded the step instructions to the new tap/hold scheme; the step-detection logic
   // (which netlist shape counts as "done") is unchanged.
-  lesson_intro: "Let's build your first circuit together. I'll guide you, one tap at a time.",
+  lesson_intro:
+    "Let's build your first circuit together. I'll guide you, one tap at a time. If you make a mistake, " +
+    'swipe right with two fingers to undo.',
   lesson_step_battery: 'First, place a battery. Tap and hold anywhere, then swipe where it should go.',
   lesson_step_bulb1: 'Now add a bulb. Triple tap, then swipe where it should go.',
   lesson_step_bulb2: 'Now add another bulb. Triple tap, then swipe where it should go.',
