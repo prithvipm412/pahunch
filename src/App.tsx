@@ -8,7 +8,7 @@ import { LanguageProvider, useLanguage, useT } from './app/lang'
 import CircuitBackground from './app/CircuitBackground'
 import HeroCircuit from './app/HeroCircuit'
 import './app/app.css'
-import { stopAll, unlockAudio } from './audio'
+import { stopAll, stopAllUnlessAlmostDone, unlockAudio, warmUpVoice } from './audio'
 import { haptic, isHapticsEnabled, setHapticsEnabled } from './audio/haptics'
 
 function AudioLifecycle() {
@@ -119,7 +119,12 @@ function Home() {
 }
 
 function App() {
-  return <LanguageProvider><div className="app-frame" onPointerDownCapture={() => { stopAll(); void unlockAudio() }} onKeyDownCapture={() => { stopAll(); void unlockAudio() }}><BrowserRouter><AudioLifecycle /><CircuitBackground /><div className="app-content"><Routes><Route path="/" element={<Home />} /><Route path="/build" element={<BuildScreen />} /><Route path="/draw" element={<DrawScreen />} /><Route path="/sparsh" element={<SparshScreen />} /><Route path="/learn" element={<LearnScreen />} /></Routes></div></BrowserRouter></div></LanguageProvider>
+  // stopAllUnlessAlmostDone(), not a blanket stopAll(), on every single tap/key anywhere in the
+  // app: cutting off a clip that had <150ms left anyway (just to immediately start a new one)
+  // was producing a choppy stop-start overlap when parts were placed quickly in succession.
+  // warmUpVoice() primes speechSynthesis on the first gesture; it's a no-op after that.
+  const onFirstGesture = () => { stopAllUnlessAlmostDone(); void unlockAudio(); warmUpVoice() }
+  return <LanguageProvider><div className="app-frame" onPointerDownCapture={onFirstGesture} onKeyDownCapture={onFirstGesture}><BrowserRouter><AudioLifecycle /><CircuitBackground /><div className="app-content"><Routes><Route path="/" element={<Home />} /><Route path="/build" element={<BuildScreen />} /><Route path="/draw" element={<DrawScreen />} /><Route path="/sparsh" element={<SparshScreen />} /><Route path="/learn" element={<LearnScreen />} /></Routes></div></BrowserRouter></div></LanguageProvider>
 }
 
 export default App

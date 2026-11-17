@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { SolveResult } from '../contracts/netlist'
-import { alarm, classifyCircuitStatus, notWorkingTone, playCircuitStatusSound, successBell } from './feedbackSounds'
+import { alarm, classifyCircuitStatus, playCircuitStatusSound, successBell } from './feedbackSounds'
 
 function resultWith(partial: Partial<SolveResult>): SolveResult {
   return { ok: true, errors: [], warnings: [], components: [], ...partial }
@@ -35,7 +35,6 @@ describe('feedback sound functions', () => {
   it('do nothing (never throw) when Web Audio is unavailable', () => {
     vi.stubGlobal('AudioContext', undefined)
     expect(() => successBell()).not.toThrow()
-    expect(() => notWorkingTone()).not.toThrow()
     expect(() => alarm()).not.toThrow()
   })
 
@@ -44,5 +43,12 @@ describe('feedback sound functions', () => {
     expect(() => playCircuitStatusSound('working')).not.toThrow()
     expect(() => playCircuitStatusSound('not_working')).not.toThrow()
     expect(() => playCircuitStatusSound('broken')).not.toThrow()
+  })
+
+  it('plays no tone at all for "not_working" (only the haptic + spoken result carry it)', () => {
+    const AudioContextMock = vi.fn()
+    vi.stubGlobal('AudioContext', AudioContextMock)
+    playCircuitStatusSound('not_working')
+    expect(AudioContextMock).not.toHaveBeenCalled()
   })
 })

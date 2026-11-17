@@ -1,7 +1,7 @@
 import type { CircuitComponent, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { describeCircuit } from '../physics/describe'
 import { classifyCircuitStatus, type CircuitStatus } from '../audio/feedbackSounds'
-import type { HapticName } from '../audio/haptics'
+import { hapticDurationMs, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
 import { countClipFor, partClipFor, posClipFor, PART_MENU_ORDER, type ClipName } from './clips'
 
 export const GRID_SIZE = 5
@@ -108,7 +108,12 @@ export interface SparshTransition {
 
 const MAX_HISTORY = 50
 const EXIT_CONFIRM_WINDOW_MS = 3000
-const RUN_SONIFY_DELAY_MS = 800
+
+// Never vibrate while speech is starting: every haptic that's immediately followed by speech
+// fires FIRST, then a delay sized to that pattern's own duration (+ this small buffer) runs
+// before the words begin — real devices were observed glitching/clipping speech that started
+// while the vibration motor was still running.
+const SPEECH_AFTER_HAPTIC_MS = 60
 
 // Each part's own "place" haptic signature (src/audio/haptics.ts), fired the moment it's
 // actually placed, so a blind student can feel *what* they just placed without waiting for
@@ -120,6 +125,15 @@ const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
   bulb: 'place_bulb',
   resistor: 'place_resistor',
   switch: 'place_switch',
+}
+
+// haptic, then (once its pattern finishes + a small buffer) the speech — see SPEECH_AFTER_HAPTIC_MS.
+function hapticThenSpeak(name: HapticName, clips: ClipName[]): SparshEffect[] {
+  return [
+    { type: 'haptic', name },
+    { type: 'delay', ms: hapticDurationMs(name) + SPEECH_AFTER_HAPTIC_MS },
+    { type: 'speak', clips },
+  ]
 }
 
 export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
@@ -298,10 +312,7 @@ function summaryClipsFor(netlist: Netlist): ClipName[] {
 function choosePart(state: SparshState, partType: ComponentType): SparshTransition {
   return {
     state: { ...state, pendingTapCount: 0, buildSub: { kind: 'partChosen', partType } },
-    effects: [
-      { type: 'speak', clips: [partClipFor(partType), 'swipe_destination'] },
-      { type: 'haptic', name: 'select' },
-    ],
+    effects: hapticThenSpeak('select', [partClipFor(partType), 'swipe_destination']),
   }
 }
 
@@ -328,13 +339,13 @@ function resolveTapCount(state: SparshState, rawCount: number): SparshTransition
 function handleCursorMove(state: SparshState, direction: Direction): SparshTransition {
   const next = neighborInDirection(state.cursor, direction, state.netlist.gridSize)
   if (!next) {
-    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'haptic', name: 'invalid' }] }
+    return { state, effects: hapticThenSpeak('invalid', ['edge']) }
   }
   const component = findComponentAt(state.netlist, next)
   const clips: ClipName[] = [posClipFor(next.row, next.col), component ? partClipFor(component.type) : 'empty']
   return {
     state: { ...state, cursor: next },
-    effects: [{ type: 'speak', clips }, { type: 'haptic', name: 'tap' }],
+    effects: hapticThenSpeak('tap', clips),
   }
 }
 
@@ -342,10 +353,10 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
   const { netlist, cursor } = state
   const neighbor = neighborInDirection(cursor, direction, netlist.gridSize)
   if (!neighbor) {
-    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'haptic', name: 'invalid' }] }
+    return { state, effects: hapticThenSpeak('invalid', ['edge']) }
   }
   if (segmentOccupied(netlist, cursor, neighbor)) {
-    return { state, effects: [{ type: 'speak', clips: ['segment_occupied'] }, { type: 'haptic', name: 'invalid' }] }
+    return { state, effects: hapticThenSpeak('invalid', ['segment_occupied']) }
   }
 
   const component: CircuitComponent = {
@@ -368,7 +379,7 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
       buildSub: nextBuildSub,
       history: pushHistory(state, [partClipFor(partType), 'removed_suffix']),
     },
-    effects: [{ type: 'speak', clips: ['placed', partClipFor(partType)] }, { type: 'haptic', name: PLACE_HAPTIC[partType] }],
+    effects: hapticThenSpeak(PLACE_HAPTIC[partType], ['placed', partClipFor(partType)]),
   })
 }
 
@@ -391,33 +402,55 @@ export function feedbackFor(event: SparshEvent, solveResult?: SolveResult | null
   return classifyCircuitStatus(solveResult ?? event.result)
 }
 
+// The fixed run sequence (src/audio/runSequence.ts): announce the run, then (once that ends)
+// the status haptic+sound, then (once that pattern clears) the existing per-outcome result
+// clip, then always start sonify() — see docs/status/l1.md for why every branch now ends in
+// sonify() even when nothing is actually flowing.
+function runStartEffects(status: CircuitStatus): SparshEffect[] {
+  return [
+    { type: 'speak', clips: ['run_starting'] },
+    { type: 'circuitStatus', status },
+    { type: 'delay', ms: hapticDurationMs(hapticForCircuitStatus(status)) + SPEECH_AFTER_HAPTIC_MS },
+  ]
+}
+
 function handleSolveResult(state: SparshState, result: SolveResult): SparshTransition {
+  // classifyCircuitStatus() alone decides the haptic+sound bucket; it catches an individually
+  // overloaded bulb even when result.ok is true and there's no 'short_circuit' error (that error
+  // only fires when the *battery's own* current trips the limit) — see its own doc comment.
+  const status = classifyCircuitStatus(result)
+  const start = runStartEffects(status)
+
   if (result.errors.includes('empty') || result.errors.includes('no_battery')) {
     return {
       state: { ...state, lastResult: result },
-      effects: [{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['nothing_to_run'] }],
+      effects: [...start, { type: 'speak', clips: ['nothing_to_run'] }, { type: 'sonifyStart', result }],
     }
   }
   if (result.errors.includes('short_circuit')) {
     return {
       state: { ...state, lastResult: result },
-      effects: [{ type: 'circuitStatus', status: 'broken' }, { type: 'speak', clips: ['short_circuit'] }],
+      effects: [...start, { type: 'speak', clips: ['short_circuit'] }, { type: 'sonifyStart', result }],
     }
   }
   if (result.errors.includes('open_circuit')) {
     return {
       state: { ...state, lastResult: result },
-      effects: [{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['open_circuit'] }],
+      effects: [...start, { type: 'speak', clips: ['open_circuit'] }, { type: 'sonifyStart', result }],
     }
   }
   if (!result.ok) {
     return {
       state: { ...state, lastResult: result },
-      effects: [{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['nothing_to_run'] }],
+      effects: [...start, { type: 'speak', clips: ['nothing_to_run'] }, { type: 'sonifyStart', result }],
     }
   }
 
-  const clips: ClipName[] = ['run']
+  // The only "existing result" left to speak for a successful run is the guided lesson's own
+  // narration — the generic "running your circuit" announcement is gone, replaced up front by
+  // RUN_STARTING_TEXT (see docs/status/l1.md for why: it was the suspected source of real-device
+  // reports of a "legend"-like explanation playing on every run).
+  const clips: ClipName[] = []
   let lesson = state.lesson
   if (lesson?.phase === 'seriesRun') {
     clips.push('lesson_series_result')
@@ -427,30 +460,15 @@ function handleSolveResult(state: SparshState, result: SolveResult): SparshTrans
     lesson = null
   }
 
-  const nextState: SparshState = {
-    ...state,
-    lastResult: result,
-    mode: 'explore',
-    explore: { point: state.cursor, overComponentId: null },
-    lesson,
-  }
-
-  // ok === true and no short_circuit error, but a bulb can still be individually overloaded
-  // (that error only fires when the *battery's* own current trips the limit) — still a
-  // successful run, so the lesson/run clips speak as normal, but the danger haptic+sound
-  // replaces the "working" ones as a safety signal, with no extra delay before sonify.
-  if (result.components.some((c) => c.state === 'overload')) {
-    return { state: nextState, effects: [{ type: 'circuitStatus', status: 'broken' }, { type: 'speak', clips }, { type: 'sonifyStart', result }] }
-  }
-
   return {
-    state: nextState,
-    effects: [
-      { type: 'circuitStatus', status: 'working' },
-      { type: 'delay', ms: RUN_SONIFY_DELAY_MS },
-      { type: 'sonifyStart', result },
-      { type: 'speak', clips },
-    ],
+    state: {
+      ...state,
+      lastResult: result,
+      mode: 'explore',
+      explore: { point: state.cursor, overComponentId: null },
+      lesson,
+    },
+    effects: [...start, ...(clips.length > 0 ? [{ type: 'speak', clips } as SparshEffect] : []), { type: 'sonifyStart', result }],
   }
 }
 
@@ -489,7 +507,7 @@ function handleRemoveAtCursor(state: SparshState): SparshTransition {
       netlist: { ...state.netlist, components: state.netlist.components.filter((c) => c.id !== component.id) },
       history: pushHistory(state, [partClipFor(component.type), 'is_back']),
     },
-    effects: [{ type: 'speak', clips: ['removed', partClipFor(component.type)] }, { type: 'haptic', name: 'delete' }],
+    effects: hapticThenSpeak('delete', ['removed', partClipFor(component.type)]),
   })
 }
 
@@ -508,7 +526,7 @@ function handleToggleSwitchAtCursor(state: SparshState): SparshTransition {
       },
       history: pushHistory(state, [switchClipFor(component.closed === true)]),
     },
-    effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }, { type: 'haptic', name: 'toggle_switch' }],
+    effects: hapticThenSpeak('toggle_switch', [switchClipFor(nextClosed)]),
   })
 }
 
@@ -537,10 +555,7 @@ function popHistory(state: SparshState): SparshTransition {
       history: state.history.slice(0, -1),
       lesson: restoredLesson,
     },
-    effects: [
-      { type: 'speak', clips: ['undone', ...entry.undoneClips, posClipFor(entry.cursor.row, entry.cursor.col)] },
-      { type: 'haptic', name: 'undo' },
-    ],
+    effects: hapticThenSpeak('undo', ['undone', ...entry.undoneClips, posClipFor(entry.cursor.row, entry.cursor.col)]),
   }
 }
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { haptic, HAPTIC_PATTERNS, hapticForCircuitStatus, isHapticsEnabled, setHapticsEnabled } from './haptics'
+import { haptic, HAPTIC_PATTERNS, hapticDurationMs, hapticForCircuitStatus, isHapticsEnabled, setHapticsEnabled } from './haptics'
 
 function fakeStorage(): Storage {
   const data = new Map<string, string>()
@@ -96,5 +96,17 @@ describe('hapticForCircuitStatus', () => {
     expect(hapticForCircuitStatus('working')).toBe('circuit_working')
     expect(hapticForCircuitStatus('not_working')).toBe('circuit_not_working')
     expect(hapticForCircuitStatus('broken')).toBe('circuit_broken')
+  })
+})
+
+describe('hapticDurationMs', () => {
+  it('returns a scalar pattern as-is', () => {
+    expect(hapticDurationMs('tap')).toBe(10)
+    expect(hapticDurationMs('circuit_working')).toBe(600)
+  })
+
+  it('sums a multi-pulse pattern', () => {
+    expect(hapticDurationMs('place_battery')).toBe(110) // [40, 30, 40]
+    expect(hapticDurationMs('circuit_broken')).toBe(480) // [120, 60, 120, 60, 120]
   })
 })

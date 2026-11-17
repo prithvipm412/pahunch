@@ -94,8 +94,8 @@ export default function SparshScreen() {
       for (const effect of effects) {
         if (!isAudioGenerationCurrent(token)) return
         if (effect.type === 'speak') {
-          setCaption(effect.clips.map(fallbackFor).join(' · '))
-          await playSequence(lang, effect.clips, (clip) => fallbackFor(clip as Parameters<typeof fallbackFor>[0]))
+          setCaption(effect.clips.map((clip) => fallbackFor(clip, lang)).join(' · '))
+          await playSequence(lang, effect.clips, (clip) => fallbackFor(clip as Parameters<typeof fallbackFor>[0], lang))
         } else if (effect.type === 'haptic') {
           haptic(effect.name, { essential: true })
         } else if (effect.type === 'circuitStatus') {

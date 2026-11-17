@@ -1,10 +1,15 @@
 /**
  * src/audio/feedbackSounds.ts — short synthesized Web Audio stingers (no audio files, works
- * offline): a success bell, a soft "not working" tone, and a danger alarm. Reuses the shared
- * AudioContext from ./index (same instance unlockAudio()/sonify() use) rather than opening a
- * second one. There is no existing app-wide sound mute to respect yet (confirmed: nothing in
- * this codebase currently stores a sound-muted setting) — if one is added later, gate these
- * three functions on it the same way haptic() gates on isHapticsEnabled().
+ * offline): a success bell and a danger alarm. Reuses the shared AudioContext from ./index
+ * (same instance unlockAudio()/sonify() use) rather than opening a second one. There is no
+ * existing app-wide sound mute to respect yet (confirmed: nothing in this codebase currently
+ * stores a sound-muted setting) — if one is added later, gate these on it the same way haptic()
+ * gates on isHapticsEnabled().
+ *
+ * Per real-device feedback, a "not working" circuit (empty/no battery/open circuit/not lit) now
+ * plays NO tone at all — just the short `circuit_not_working` vibration plus the existing spoken
+ * result. The old notWorkingTone() "bonk" was removed entirely rather than just unused, since a
+ * dead function here would be an easy thing for a future pass to accidentally wire back in.
  */
 import type { SolveResult } from '../contracts/netlist'
 import { getAudioContext } from './index'
@@ -55,7 +60,10 @@ function resumeIfSuspended(ctx: AudioContext): void {
 }
 
 /** A pleasant soft bell: a quick 3-note rising arpeggio (C5–E5–G5) with a gentle soft harmonic
- * on each note, quick attack, ~1.2s total decay. */
+ * on each note, quick attack, ~1.2s total decay. Softened per real-device feedback — the notes
+ * overlap in time (each stays mid-decay when the next starts), and their gains sum at the
+ * destination, so even a modest per-note peak can read as loud; these per-note peaks keep the
+ * combined loudness well under the ~0.25 ceiling that sounded right on a real phone. */
 export function successBell(): void {
   try {
     const ctx = getAudioContext()
@@ -64,20 +72,9 @@ export function successBell(): void {
     const notes = [523.25, 659.25, 783.99] // C5, E5, G5
     notes.forEach((freq, i) => {
       const start = t0 + i * 0.12
-      playTone(ctx, { freq, start, duration: 0.9, peakGain: 0.14 })
-      playTone(ctx, { freq: freq * 2, start, duration: 0.5, peakGain: 0.04 }) // soft harmonic, one octave up
+      playTone(ctx, { freq, start, duration: 0.9, peakGain: 0.09 })
+      playTone(ctx, { freq: freq * 2, start, duration: 0.5, peakGain: 0.025 }) // soft harmonic, one octave up
     })
-    resumeIfSuspended(ctx)
-  } catch { /* Web Audio may be unavailable. */ }
-}
-
-/** A soft, low, non-scary falling "bonk" (~0.25s) for an incomplete or dark circuit. */
-export function notWorkingTone(): void {
-  try {
-    const ctx = getAudioContext()
-    if (!ctx) return
-    const t0 = ctx.currentTime
-    playTone(ctx, { freq: 220, freqEnd: 140, start: t0, duration: 0.25, peakGain: 0.12, type: 'sine' })
     resumeIfSuspended(ctx)
   } catch { /* Web Audio may be unavailable. */ }
 }
@@ -101,9 +98,10 @@ export function alarm(): void {
   } catch { /* Web Audio may be unavailable. */ }
 }
 
-/** Plays the right stinger for a classified circuit status. */
+/** Plays the right stinger for a classified circuit status. 'not_working' plays no tone at all —
+ * just the short vibration plus the existing spoken result (see src/audio/haptics.ts and the
+ * run sequence in src/audio/runSequence.ts). */
 export function playCircuitStatusSound(status: CircuitStatus): void {
   if (status === 'working') successBell()
   else if (status === 'broken') alarm()
-  else notWorkingTone()
 }

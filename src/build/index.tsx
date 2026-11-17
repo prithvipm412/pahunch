@@ -2,9 +2,10 @@ import { useMemo, useRef, useState, type CSSProperties, type MouseEvent as React
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { CircuitComponent, ComponentResult, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
-import { stopAll, stopSonify } from '../audio'
-import { haptic, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
+import { playClip, sonify, stopAll, stopSonify } from '../audio'
+import { haptic, hapticDurationMs, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
 import { classifyCircuitStatus, playCircuitStatusSound } from '../audio/feedbackSounds'
+import { RUN_STARTING_TEXT } from '../audio/runSequence'
 import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
 import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
@@ -318,7 +319,17 @@ export default function BuildScreen() {
     haptic('select')
     saveNetlist({ ...netlist, components: netlist.components.map((component) => component.id === selectedId ? { ...component, ...changes } : component) }, true)
   }
-  function runCircuit() {
+  function friendlyErrorTextFor(solveResult: SolveResult): string {
+    if (solveResult.errors.length === 0) return translate('fallbackError')
+    return solveResult.errors
+      .map((error) => error === 'no_battery' || error === 'empty' ? translate('noBattery') : error === 'short_circuit' ? translate('shortCircuit') : error === 'open_circuit' ? translate('openCircuit') : translate('otherError'))
+      .join(' ')
+  }
+  // The fixed run sequence (src/audio/runSequence.ts), shared with Sparsh: announce the run,
+  // then (once that ends) the status haptic+sound, then (once that pattern clears) the existing
+  // result text, then always start sonify() — Build never had any of this before, including the
+  // continuous sonify() tone.
+  async function runCircuit() {
     stopAll()
     let next: SolveResult
     try {
@@ -329,10 +340,13 @@ export default function BuildScreen() {
     } finally {
       stopAll()
     }
-    // Fired after stopAll()'s own navigator.vibrate(0) cleanup above, so it isn't immediately cancelled.
+    await playClip(lang, 'run_starting', RUN_STARTING_TEXT[lang])
     const status = classifyCircuitStatus(next)
     haptic(hapticForCircuitStatus(status), { essential: true })
     playCircuitStatusSound(status)
+    await new Promise<void>((resolveDelay) => { setTimeout(resolveDelay, hapticDurationMs(hapticForCircuitStatus(status)) + 60) })
+    await playClip(lang, next.ok ? 'build_run_ok' : 'build_run_error', next.ok ? translate('resultsUpdated') : friendlyErrorTextFor(next))
+    sonify(next)
   }
   const friendlyErrors = result?.errors.map((error) => error === 'no_battery' || error === 'empty' ? translate('noBattery') : error === 'short_circuit' ? translate('shortCircuit') : error === 'open_circuit' ? translate('openCircuit') : translate('otherError'))
   function clearCircuit() {

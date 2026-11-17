@@ -35,11 +35,15 @@ export const HAPTIC_PATTERNS: Record<HapticName, number | number[]> = {
   tap: 10,
   select: 15,
   send: 25,
-  place_wire: 20,
-  place_battery: [60, 40, 60],
-  place_bulb: 40,
-  place_resistor: [15, 30, 15, 30, 15],
-  place_switch: [10, 20, 30],
+  // Placement patterns, shortened per real-device feedback: the originals (wire 20, battery
+  // [60,40,60], bulb 40, resistor [15,30,15,30,15], switch [10,20,30]) ran long enough that the
+  // speech which now always follows them (see hapticThenSpeak in src/sparsh/machine.ts) felt
+  // sluggish to start.
+  place_wire: 15,
+  place_battery: [40, 30, 40],
+  place_bulb: 30,
+  place_resistor: [12, 25, 12, 25, 12],
+  place_switch: [10, 20, 25],
   toggle_switch: 30,
   delete: [30, 60, 10],
   undo: [10, 40, 30],
@@ -50,6 +54,14 @@ export const HAPTIC_PATTERNS: Record<HapticName, number | number[]> = {
   learn_correct: [30, 50, 30],
   learn_wrong: 80,
   scan_success: [30, 50, 30],
+}
+
+/** Total duration (ms) of a named pattern — the sum of a multi-pulse array, or the pattern
+ * itself for a single pulse. Used to know how long to wait after firing a haptic before
+ * starting speech (see the file header's "never vibrate while speech is starting" rule). */
+export function hapticDurationMs(name: HapticName): number {
+  const pattern = HAPTIC_PATTERNS[name]
+  return Array.isArray(pattern) ? pattern.reduce((sum, ms) => sum + ms, 0) : pattern
 }
 
 // Informational outcomes — never suppressed by prefers-reduced-motion, in any module.

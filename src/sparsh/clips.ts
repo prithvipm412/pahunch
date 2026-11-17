@@ -26,7 +26,9 @@ export const CLIPS = {
   in_series: 'connected in series',
   in_parallel: 'connected in parallel',
   not_connected: 'not yet a complete circuit',
-  run: 'running your circuit',
+  // Opens every run, replacing the old generic 'run' announcement entirely (see
+  // docs/status/l1.md for why 'run' itself was dropped from the sequence).
+  run_starting: 'Okay, running circuit.',
   state_off: 'off',
   state_dim: 'dim',
   state_normal: 'normal',
@@ -102,7 +104,17 @@ export const CLIPS = {
 
 export type ClipName = keyof typeof CLIPS
 
-export function fallbackFor(name: ClipName): string {
+// A handful of clips need a real Kannada fallback line (not just the English text every other
+// clip uses while recordings are pending) — currently just the new run-starting announcement,
+// since its exact Kannada wording was specified directly. Left as a small partial override
+// rather than translating the whole CLIPS dict, consistent with "English fallback text... until
+// recorded audio ships" above.
+const CLIPS_KN: Partial<Record<ClipName, string>> = {
+  run_starting: 'ಸರಿ, ಸರ್ಕ್ಯೂಟ್ ಚಾಲನೆ ಮಾಡುತ್ತಿದ್ದೇನೆ.',
+}
+
+export function fallbackFor(name: ClipName, lang: 'en' | 'kn' = 'en'): string {
+  if (lang === 'kn') return CLIPS_KN[name] ?? CLIPS[name]
   return CLIPS[name]
 }
 
