@@ -1,7 +1,7 @@
 file,en,kn
-pos_template,”Row {r}, column {c}.”,”ಸಾಲು {r}, ಕಾಲಂ {c}.”
+pos_template,”Row {r},"column {c}.”,”ಸಾಲು {r}, ಕಾಲಂ {c}.”"
 welcome,Welcome to KaagazLab. Double-tap anywhere to start.,ಕಾಗಜ್‌ಲ್ಯಾಬ್‌ಗೆ ಸ್ವಾಗತ. ಶುರು ಮಾಡಲು ಎಲ್ಲಿಯಾದರೂ ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
-talkback_hint,”For best results, pause TalkBack by holding both volume keys.”,ಚೆನ್ನಾಗಿ ಕೆಲಸ ಮಾಡಲು ಎರಡೂ ವಾಲ್ಯೂಮ್ ಬಟನ್ ಒತ್ತಿ ಹಿಡಿದು TalkBack ಅನ್ನು ಸ್ವಲ್ಪ ಹೊತ್ತು ನಿಲ್ಲಿಸಿ.
+talkback_hint,”For best results,"pause TalkBack by holding both volume keys.”,ಚೆನ್ನಾಗಿ ಕೆಲಸ ಮಾಡಲು ಎರಡೂ ವಾಲ್ಯೂಮ್ ಬಟನ್ ಒತ್ತಿ ಹಿಡಿದು TalkBack ಅನ್ನು ಸ್ವಲ್ಪ ಹೊತ್ತು ನಿಲ್ಲಿಸಿ."
 grid_intro,You are on a five by five grid. Swipe to move. Double-tap to place a part.,ನೀವು ಐದು ಸಾಲು ಮತ್ತು ಐದು ಕಾಲಂ ಇರುವ ಚೌಕದಲ್ಲಿ ಇದ್ದೀರಿ. ಚಲಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಭಾಗವನ್ನು ಇಡಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
 row,Row,ಸಾಲು
 column,Column,ಕಾಲಂ
@@ -26,8 +26,8 @@ undo,Undone.,ರದ್ದು ಮಾಡಲಾಯಿತು.
 switch_open,The switch is open.,ಸ್ವಿಚ್ ತೆರೆದಿದೆ.
 switch_closed,The switch is closed.,ಸ್ವಿಚ್ ಮುಚ್ಚಿದೆ.
 your_circuit_has,Your circuit has,ನಿಮ್ಮ ಮಂಡಲದಲ್ಲಿ
-in_series,”connected in one loop, in series.”,”ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ, ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಲಾಗಿದೆ.”
-in_parallel,”connected on separate branches, in parallel.”,”ಬೇರೆ ಬೇರೆ ಕವಲುಗಳಲ್ಲಿ, ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಲಾಗಿದೆ.”
+in_series,”connected in one loop,"in series.”,”ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ, ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಲಾಗಿದೆ.”"
+in_parallel,”connected on separate branches,"in parallel.”,”ಬೇರೆ ಬೇರೆ ಕವಲುಗಳಲ್ಲಿ, ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಲಾಗಿದೆ.”"
 not_connected,Some parts are not connected yet.,ಕೆಲವು ಭಾಗಗಳು ಇನ್ನೂ ಜೋಡಣೆ ಆಗಿಲ್ಲ.
 run,Running your circuit. Listen.,ನಿಮ್ಮ ಮಂಡಲ ಚಾಲೂ ಆಗುತ್ತಿದೆ. ಕೇಳಿ.
 run_hint,Double-tap with two fingers to run the circuit.,ಮಂಡಲವನ್ನು ಚಾಲೂ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
@@ -38,22 +38,22 @@ state_normal,glowing,ಉರಿಯುತ್ತಿದೆ
 state_bright,glowing brightly,ಜೋರಾಗಿ ಉರಿಯುತ್ತಿದೆ
 state_overload,too much current!,ತುಂಬಾ ಹೆಚ್ಚು ವಿದ್ಯುತ್!
 short_circuit,Short circuit! The battery is connected straight across. Add a bulb or a resistor.,ಶಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್! ಬ್ಯಾಟರಿಗೆ ನೇರವಾಗಿ ತಂತಿ ಜೋಡಿಸಲಾಗಿದೆ. ಒಂದು ಬಲ್ಬ್ ಅಥವಾ ರೋಧಕ ಸೇರಿಸಿ.
-open_circuit,”The loop is not complete, so current cannot flow.”,”ಸುತ್ತು ಪೂರ್ತಿಯಾಗಿಲ್ಲ, ಆದ್ದರಿಂದ ವಿದ್ಯುತ್ ಹರಿಯಲು ಆಗುವುದಿಲ್ಲ.”
+open_circuit,”The loop is not complete,"so current cannot flow.”,”ಸುತ್ತು ಪೂರ್ತಿಯಾಗಿಲ್ಲ, ಆದ್ದರಿಂದ ವಿದ್ಯುತ್ ಹರಿಯಲು ಆಗುವುದಿಲ್ಲ.”"
 nothing_to_run,Add a battery and a bulb first.,ಮೊದಲು ಒಂದು ಬ್ಯಾಟರಿ ಮತ್ತು ಒಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ.
 predict_question,Before we run it: what will the bulbs do?,ಚಾಲೂ ಮಾಡುವ ಮೊದಲು ಹೇಳಿ: ಬಲ್ಬ್‌ಗಳು ಏನಾಗುತ್ತವೆ?
 predict_controls,Tap the top half to hear the next answer. Double-tap to choose.,ಮುಂದಿನ ಉತ್ತರ ಕೇಳಲು ಪರದೆಯ ಮೇಲಿನ ಅರ್ಧದಲ್ಲಿ ತಟ್ಟಿ. ಆರಿಸಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
 opt_both_bright,Both bulbs bright.,ಎರಡೂ ಬಲ್ಬ್ ಜೋರಾಗಿ ಉರಿಯುತ್ತವೆ.
 opt_both_dim,Both bulbs dim.,ಎರಡೂ ಬಲ್ಬ್ ಮಂದವಾಗಿ ಉರಿಯುತ್ತವೆ.
-opt_one_each,”One bright, one dim.”,”ಒಂದು ಜೋರಾಗಿ, ಇನ್ನೊಂದು ಮಂದವಾಗಿ.”
+opt_one_each,”One bright,"one dim.”,”ಒಂದು ಜೋರಾಗಿ, ಇನ್ನೊಂದು ಮಂದವಾಗಿ.”"
 opt_both_off,Both bulbs off.,ಎರಡೂ ಬಲ್ಬ್ ಆರಿರುತ್ತವೆ.
 correct,Correct! Well done.,ಸರಿ ಉತ್ತರ! ಶಹಬ್ಬಾಸ್.
 not_quite,Not quite. Let’s see why.,ಸ್ವಲ್ಪ ತಪ್ಪಾಯಿತು. ಯಾಕೆ ಅಂತ ನೋಡೋಣ.
-explain_series,”In series, the bulbs share the battery’s push, so each bulb gets less and glows dimmer.”,”ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಬಲ್ಬ್‌ಗಳು ಬ್ಯಾಟರಿಯ ತಳ್ಳುವ ಶಕ್ತಿಯನ್ನು ಹಂಚಿಕೊಳ್ಳುತ್ತವೆ, ಆದ್ದರಿಂದ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೆ ಕಡಿಮೆ ಸಿಗುತ್ತದೆ ಮತ್ತು ಮಂದವಾಗಿ ಉರಿಯುತ್ತದೆ.”
-explain_parallel,”In parallel, each bulb gets the full push of the battery, so both glow brightly.”,”ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೆ ಬ್ಯಾಟರಿಯ ಪೂರ್ತಿ ತಳ್ಳುವ ಶಕ್ತಿ ಸಿಗುತ್ತದೆ, ಆದ್ದರಿಂದ ಎರಡೂ ಜೋರಾಗಿ ಉರಿಯುತ್ತವೆ.”
-explain_open,”Current needs a complete loop. If there is a gap, nothing lights up.”,ವಿದ್ಯುತ್ ಹರಿಯಲು ಪೂರ್ತಿ ಸುತ್ತು ಬೇಕು. ಎಲ್ಲಾದರೂ ತುಂಡಾಗಿದ್ದರೆ ಏನೂ ಉರಿಯುವುದಿಲ್ಲ.
-explain_switch,”An open switch makes a gap in the loop, so the bulb turns off.”,”ತೆರೆದ ಸ್ವಿಚ್ ಸುತ್ತನ್ನು ತುಂಡು ಮಾಡುತ್ತದೆ, ಆದ್ದರಿಂದ ಬಲ್ಬ್ ಆರುತ್ತದೆ.”
+explain_series,”In series,"the bulbs share the battery’s push, so each bulb gets less and glows dimmer.”,”ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಬಲ್ಬ್‌ಗಳು ಬ್ಯಾಟರಿಯ ತಳ್ಳುವ ಶಕ್ತಿಯನ್ನು ಹಂಚಿಕೊಳ್ಳುತ್ತವೆ, ಆದ್ದರಿಂದ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೆ ಕಡಿಮೆ ಸಿಗುತ್ತದೆ ಮತ್ತು ಮಂದವಾಗಿ ಉರಿಯುತ್ತದೆ.”"
+explain_parallel,”In parallel,"each bulb gets the full push of the battery, so both glow brightly.”,”ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೆ ಬ್ಯಾಟರಿಯ ಪೂರ್ತಿ ತಳ್ಳುವ ಶಕ್ತಿ ಸಿಗುತ್ತದೆ, ಆದ್ದರಿಂದ ಎರಡೂ ಜೋರಾಗಿ ಉರಿಯುತ್ತವೆ.”"
+explain_open,”Current needs a complete loop. If there is a gap,"nothing lights up.”,ವಿದ್ಯುತ್ ಹರಿಯಲು ಪೂರ್ತಿ ಸುತ್ತು ಬೇಕು. ಎಲ್ಲಾದರೂ ತುಂಡಾಗಿದ್ದರೆ ಏನೂ ಉರಿಯುವುದಿಲ್ಲ."
+explain_switch,”An open switch makes a gap in the loop,"so the bulb turns off.”,”ತೆರೆದ ಸ್ವಿಚ್ ಸುತ್ತನ್ನು ತುಂಡು ಮಾಡುತ್ತದೆ, ಆದ್ದರಿಂದ ಬಲ್ಬ್ ಆರುತ್ತದೆ.”"
 explain_short,A wire straight across the battery lets current rush through without lighting anything. This is dangerous in real life.,ಬ್ಯಾಟರಿಗೆ ನೇರವಾಗಿ ಜೋಡಿಸಿದ ತಂತಿಯಲ್ಲಿ ವಿದ್ಯುತ್ ಏನನ್ನೂ ಉರಿಸದೆ ವೇಗವಾಗಿ ಹರಿಯುತ್ತದೆ. ನಿಜ ಜೀವನದಲ್ಲಿ ಇದು ಅಪಾಯಕಾರಿ.
-explain_resistor,”A resistor slows the current down, so the bulb glows dimmer.”,”ರೋಧಕ ವಿದ್ಯುತ್ತನ್ನು ನಿಧಾನ ಮಾಡುತ್ತದೆ, ಆದ್ದರಿಂದ ಬಲ್ಬ್ ಮಂದವಾಗಿ ಉರಿಯುತ್ತದೆ.”
+explain_resistor,”A resistor slows the current down,"so the bulb glows dimmer.”,”ರೋಧಕ ವಿದ್ಯುತ್ತನ್ನು ನಿಧಾನ ಮಾಡುತ್ತದೆ, ಆದ್ದರಿಂದ ಬಲ್ಬ್ ಮಂದವಾಗಿ ಉರಿಯುತ್ತದೆ.”"
 try_parallel,Now try building it in parallel.,ಈಗ ಇದನ್ನು ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಿ ನೋಡಿ.
 try_series,Now try putting the bulbs in one loop.,ಈಗ ಬಲ್ಬ್‌ಗಳನ್ನು ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ ಜೋಡಿಸಿ ನೋಡಿ.
 try_switch,Now try opening the switch.,ಈಗ ಸ್ವಿಚ್ ತೆರೆದು ನೋಡಿ.
@@ -73,3 +73,122 @@ no,No,ಇಲ್ಲ
 back,Going back.,ಹಿಂದಕ್ಕೆ ಹೋಗುತ್ತಿದೆ.
 home,Home screen.,ಮುಖ್ಯ ಪರದೆ.
 language_switched,Language changed to English.,ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.
+learn_menu,Learn mode. Swipe to choose a level. Double-tap to start.,ಕಲಿಕೆ ವಿಭಾಗ. ಹಂತವನ್ನು ಆರಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಶುರು ಮಾಡಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+level_locked,This level is locked. Finish the level before it to open it.,ಈ ಹಂತ ಇನ್ನೂ ತೆರೆದಿಲ್ಲ. ಇದನ್ನು ತೆರೆಯಲು ಹಿಂದಿನ ಹಂತವನ್ನು ಮುಗಿಸಿ.
+level_unlocked,New level unlocked!,ಹೊಸ ಹಂತ ತೆರೆಯಿತು!
+level_complete,Level complete!,ಹಂತ ಮುಗಿಯಿತು!
+stars_1,You earned one star.,ನಿಮಗೆ ಒಂದು ನಕ್ಷತ್ರ ಸಿಕ್ಕಿತು.
+stars_2,You earned two stars.,ನಿಮಗೆ ಎರಡು ನಕ್ಷತ್ರ ಸಿಕ್ಕಿತು.
+stars_3,You earned three stars! Perfect.,ನಿಮಗೆ ಮೂರು ನಕ್ಷತ್ರ ಸಿಕ್ಕಿತು! ಅದ್ಭುತ.
+lvl_stars_0,Not done yet.,ಇನ್ನೂ ಮುಗಿದಿಲ್ಲ.
+lvl_stars_1,One star.,ಒಂದು ನಕ್ಷತ್ರ.
+lvl_stars_2,Two stars.,ಎರಡು ನಕ್ಷತ್ರ.
+lvl_stars_3,Three stars.,ಮೂರು ನಕ್ಷತ್ರ.
+try_again,Not yet. Try again.,ಇನ್ನೂ ಆಗಿಲ್ಲ. ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.
+hint_coming,Here is a hint.,ಇಲ್ಲಿದೆ ಒಂದು ಸುಳಿವು.
+all_complete,You finished every level. You are a circuit expert!,ನೀವು ಎಲ್ಲಾ ಹಂತಗಳನ್ನು ಮುಗಿಸಿದಿರಿ. ನೀವು ಈಗ ಮಂಡಲ ತಜ್ಞರು!
+lvl1_title,Level 1. Meet the battery.,ಹಂತ ಒಂದು. ಬ್ಯಾಟರಿಯ ಪರಿಚಯ.
+lvl1_learn,A battery gives the push that makes electricity flow. It has two ends: plus and minus.,ಬ್ಯಾಟರಿ ವಿದ್ಯುತ್ತನ್ನು ಹರಿಯುವಂತೆ ತಳ್ಳುತ್ತದೆ. ಅದಕ್ಕೆ ಎರಡು ತುದಿಗಳಿವೆ: ಪ್ಲಸ್ ಮತ್ತು ಮೈನಸ್.
+lvl1_task,Place a battery anywhere on the grid.,ಚೌಕದಲ್ಲಿ ಎಲ್ಲಿಯಾದರೂ ಒಂದು ಬ್ಯಾಟರಿ ಇಡಿ.
+lvl1_done,Great. That is a battery. It pushes current around a circuit.,ಚೆನ್ನಾಗಿದೆ. ಇದೇ ಬ್ಯಾಟರಿ. ಇದು ಮಂಡಲದಲ್ಲಿ ವಿದ್ಯುತ್ತನ್ನು ಸುತ್ತಲೂ ತಳ್ಳುತ್ತದೆ.
+lvl1_hint,Open the parts menu and choose Battery.,ಭಾಗಗಳ ಪಟ್ಟಿಯನ್ನು ತೆರೆದು ಬ್ಯಾಟರಿ ಆರಿಸಿ.
+lvl2_title,Level 2. Meet the bulb.,ಹಂತ ಎರಡು. ಬಲ್ಬ್‌ನ ಪರಿಚಯ.
+lvl2_learn,A bulb glows when electricity flows through it.,ಬಲ್ಬ್ ಒಳಗೆ ವಿದ್ಯುತ್ ಹರಿದಾಗ ಅದು ಉರಿಯುತ್ತದೆ.
+lvl2_task,Place a bulb on the grid near the battery.,ಚೌಕದಲ್ಲಿ ಬ್ಯಾಟರಿಯ ಹತ್ತಿರ ಒಂದು ಬಲ್ಬ್ ಇಡಿ.
+lvl2_done,Good. The bulb is not glowing yet. It needs a complete loop.,ಒಳ್ಳೆಯದು. ಬಲ್ಬ್ ಇನ್ನೂ ಉರಿಯುತ್ತಿಲ್ಲ. ಅದಕ್ಕೆ ಪೂರ್ತಿ ಸುತ್ತು ಬೇಕು.
+lvl2_hint,Open the parts menu and choose Bulb.,ಭಾಗಗಳ ಪಟ್ಟಿಯನ್ನು ತೆರೆದು ಬಲ್ಬ್ ಆರಿಸಿ.
+lvl3_title,Level 3. Your first circuit.,ಹಂತ ಮೂರು. ನಿಮ್ಮ ಮೊದಲ ಮಂಡಲ.
+lvl3_learn,"Electricity needs a complete path. It goes from the battery, through the bulb, and back to the battery.","ವಿದ್ಯುತ್ತಿಗೆ ಪೂರ್ತಿ ದಾರಿ ಬೇಕು. ಅದು ಬ್ಯಾಟರಿಯಿಂದ ಹೊರಟು, ಬಲ್ಬ್ ಮೂಲಕ ಹೋಗಿ, ಮತ್ತೆ ಬ್ಯಾಟರಿಗೆ ಬರುತ್ತದೆ."
+lvl3_task,Join the battery and the bulb with wires to make a loop. Then run the circuit.,ತಂತಿಗಳಿಂದ ಬ್ಯಾಟರಿ ಮತ್ತು ಬಲ್ಬ್ ಜೋಡಿಸಿ ಒಂದು ಸುತ್ತು ಮಾಡಿ. ನಂತರ ಮಂಡಲವನ್ನು ಚಾಲೂ ಮಾಡಿ.
+lvl3_done,The bulb is glowing! You built your first circuit.,ಬಲ್ಬ್ ಉರಿಯುತ್ತಿದೆ! ನೀವು ನಿಮ್ಮ ಮೊದಲ ಮಂಡಲ ಮಾಡಿದಿರಿ.
+lvl3_hint,Trace the wires with your finger. Every part must connect back to the battery.,ಬೆರಳಿನಿಂದ ತಂತಿಗಳ ಮೇಲೆ ಸರಿಸಿ ನೋಡಿ. ಪ್ರತಿ ಭಾಗವೂ ಮತ್ತೆ ಬ್ಯಾಟರಿಗೆ ಜೋಡಣೆ ಆಗಿರಬೇಕು.
+lvl4_title,Level 4. Mind the gap.,ಹಂತ ನಾಲ್ಕು. ತುಂಡಾದ ಜಾಗ ಗಮನಿಸಿ.
+lvl4_learn,"If there is a gap anywhere in the loop, the current stops.",ಸುತ್ತಿನಲ್ಲಿ ಎಲ್ಲಾದರೂ ತುಂಡಾಗಿದ್ದರೆ ವಿದ್ಯುತ್ ನಿಲ್ಲುತ್ತದೆ.
+lvl4_task,This circuit has a gap. Find it and fix it.,ಈ ಮಂಡಲದಲ್ಲಿ ಒಂದು ಕಡೆ ತುಂಡಾಗಿದೆ. ಅದನ್ನು ಹುಡುಕಿ ಸರಿಪಡಿಸಿ.
+lvl4_done,You fixed the gap. The loop is complete again.,ನೀವು ತುಂಡಾದ ಜಾಗವನ್ನು ಸರಿಪಡಿಸಿದಿರಿ. ಸುತ್ತು ಮತ್ತೆ ಪೂರ್ತಿಯಾಯಿತು.
+lvl5_title,Level 5. The switch.,ಹಂತ ಐದು. ಸ್ವಿಚ್.
+lvl5_learn,A switch opens and closes a gap in the loop. It turns things on and off.,ಸ್ವಿಚ್ ಸುತ್ತಿನಲ್ಲಿ ಒಂದು ಜಾಗವನ್ನು ತೆರೆಯುತ್ತದೆ ಮತ್ತು ಮುಚ್ಚುತ್ತದೆ. ಇದರಿಂದ ವಸ್ತುಗಳು ಆನ್ ಮತ್ತು ಆಫ್ ಆಗುತ್ತವೆ.
+lvl5_task,"Add a switch to the loop. Run the circuit, then open the switch and run it again.",ಸುತ್ತಿಗೆ ಒಂದು ಸ್ವಿಚ್ ಸೇರಿಸಿ. ಮಂಡಲವನ್ನು ಚಾಲೂ ಮಾಡಿ. ನಂತರ ಸ್ವಿಚ್ ತೆರೆದು ಮತ್ತೆ ಚಾಲೂ ಮಾಡಿ.
+lvl5_done,The switch turns the bulb on and off. A light switch at home works the same way.,ಸ್ವಿಚ್ ಬಲ್ಬನ್ನು ಆನ್ ಮತ್ತು ಆಫ್ ಮಾಡುತ್ತದೆ. ಮನೆಯಲ್ಲಿರುವ ಲೈಟ್ ಸ್ವಿಚ್ ಕೂಡ ಹೀಗೆಯೇ ಕೆಲಸ ಮಾಡುತ್ತದೆ.
+lvl5_hint,Double-tap the switch to open or close it.,ಸ್ವಿಚ್ ತೆರೆಯಲು ಅಥವಾ ಮುಚ್ಚಲು ಅದರ ಮೇಲೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+lvl6_title,Level 6. Series.,ಹಂತ ಆರು. ಸರಣಿ ಕ್ರಮ.
+lvl6_learn,"In series, parts are joined one after another in a single loop.",ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಭಾಗಗಳನ್ನು ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ ಒಂದರ ನಂತರ ಒಂದು ಜೋಡಿಸಲಾಗುತ್ತದೆ.
+lvl6_task,Build one loop with a battery and two bulbs one after the other. Then run it.,ಒಂದು ಬ್ಯಾಟರಿ ಮತ್ತು ಎರಡು ಬಲ್ಬ್‌ಗಳನ್ನು ಒಂದರ ನಂತರ ಒಂದು ಜೋಡಿಸಿ ಒಂದೇ ಸುತ್ತು ಮಾಡಿ. ನಂತರ ಚಾಲೂ ಮಾಡಿ.
+lvl6_done,Well done. Listen to why.,ಭೇಷ್. ಯಾಕೆ ಅಂತ ಕೇಳಿ.
+lvl6_hint,Put both bulbs in the same loop like beads on one string.,ಒಂದೇ ದಾರದಲ್ಲಿ ಮಣಿಗಳನ್ನು ಪೋಣಿಸಿದಂತೆ ಎರಡೂ ಬಲ್ಬ್‌ಗಳನ್ನು ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ ಇಡಿ.
+lvl7_title,Level 7. Parallel.,ಹಂತ ಏಳು. ಸಮಾಂತರ ಕ್ರಮ.
+lvl7_learn,"In parallel, each bulb gets its own path to the battery.",ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೂ ಬ್ಯಾಟರಿಗೆ ತನ್ನದೇ ಆದ ದಾರಿ ಇರುತ್ತದೆ.
+lvl7_task,Build a circuit with two bulbs on separate branches. Then run it.,ಎರಡು ಬಲ್ಬ್‌ಗಳನ್ನು ಬೇರೆ ಬೇರೆ ಕವಲುಗಳಲ್ಲಿ ಇಟ್ಟು ಮಂಡಲ ಮಾಡಿ. ನಂತರ ಚಾಲೂ ಮಾಡಿ.
+lvl7_done,Well done. Listen to why.,ಭೇಷ್. ಯಾಕೆ ಅಂತ ಕೇಳಿ.
+lvl7_hint,Give each bulb its own wire path from one end of the battery to the other.,ಪ್ರತಿ ಬಲ್ಬ್‌ಗೂ ಬ್ಯಾಟರಿಯ ಒಂದು ತುದಿಯಿಂದ ಇನ್ನೊಂದು ತುದಿಗೆ ಬೇರೆಯೇ ತಂತಿ ದಾರಿ ಕೊಡಿ.
+lvl8_title,Level 8. One bulb out.,ಹಂತ ಎಂಟು. ಒಂದು ಬಲ್ಬ್ ತೆಗೆದರೆ.
+lvl8_learn,What happens if one bulb is taken out?,ಒಂದು ಬಲ್ಬ್ ತೆಗೆದರೆ ಏನಾಗುತ್ತದೆ?
+lvl8_task,Remove one bulb from this series circuit and run it. Then do the same in the parallel circuit.,ಈ ಸರಣಿ ಮಂಡಲದಿಂದ ಒಂದು ಬಲ್ಬ್ ತೆಗೆದು ಚಾಲೂ ಮಾಡಿ. ನಂತರ ಸಮಾಂತರ ಮಂಡಲದಲ್ಲೂ ಹಾಗೆಯೇ ಮಾಡಿ.
+lvl8_done,"In series, removing one bulb breaks the loop, so everything goes off. In parallel, the other bulb stays on. That is why homes are wired in parallel.","ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಒಂದು ಬಲ್ಬ್ ತೆಗೆದರೆ ಸುತ್ತು ತುಂಡಾಗುತ್ತದೆ, ಆದ್ದರಿಂದ ಎಲ್ಲವೂ ಆರುತ್ತದೆ. ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಇನ್ನೊಂದು ಬಲ್ಬ್ ಉರಿಯುತ್ತಲೇ ಇರುತ್ತದೆ. ಅದಕ್ಕೇ ಮನೆಗಳಲ್ಲಿ ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ತಂತಿ ಜೋಡಿಸುತ್ತಾರೆ."
+lvl8_hint,Find a bulb on the grid and remove it. Then run the circuit.,ಚೌಕದಲ್ಲಿ ಒಂದು ಬಲ್ಬ್ ಹುಡುಕಿ ತೆಗೆಯಿರಿ. ನಂತರ ಮಂಡಲವನ್ನು ಚಾಲೂ ಮಾಡಿ.
+lvl9_title,Level 9. The resistor.,ಹಂತ ಒಂಬತ್ತು. ರೋಧಕ.
+lvl9_learn,A resistor makes it harder for current to flow.,ರೋಧಕ ವಿದ್ಯುತ್ ಹರಿಯುವುದನ್ನು ಕಷ್ಟ ಮಾಡುತ್ತದೆ.
+lvl9_task,Add a resistor in the loop with the bulb. Run it and listen.,ಬಲ್ಬ್ ಇರುವ ಸುತ್ತಿನಲ್ಲಿ ಒಂದು ರೋಧಕ ಸೇರಿಸಿ. ಚಾಲೂ ಮಾಡಿ ಕೇಳಿ.
+lvl9_done,Well done. Listen to why.,ಭೇಷ್. ಯಾಕೆ ಅಂತ ಕೇಳಿ.
+lvl9_hint,Place the resistor in the same loop as the bulb.,ರೋಧಕವನ್ನು ಬಲ್ಬ್ ಇರುವ ಅದೇ ಸುತ್ತಿನಲ್ಲಿ ಇಡಿ.
+lvl10_title,Level 10. Short circuit danger.,ಹಂತ ಹತ್ತು. ಶಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್ ಅಪಾಯ.
+lvl10_learn,A short circuit is when a wire joins the two ends of the battery with nothing in between.,ಮಧ್ಯದಲ್ಲಿ ಏನೂ ಇಲ್ಲದೆ ಒಂದು ತಂತಿ ಬ್ಯಾಟರಿಯ ಎರಡು ತುದಿಗಳನ್ನು ಜೋಡಿಸಿದರೆ ಅದು ಶಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್.
+lvl10_task,This circuit has a short circuit. Find the dangerous wire and remove it.,ಈ ಮಂಡಲದಲ್ಲಿ ಶಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್ ಇದೆ. ಅಪಾಯಕಾರಿ ತಂತಿಯನ್ನು ಹುಡುಕಿ ತೆಗೆಯಿರಿ.
+lvl10_done,Safe again! Never join the two ends of a battery with only a wire.,ಈಗ ಮತ್ತೆ ಸುರಕ್ಷಿತ! ಬ್ಯಾಟರಿಯ ಎರಡು ತುದಿಗಳನ್ನು ಬರೀ ತಂತಿಯಿಂದ ಎಂದೂ ಜೋಡಿಸಬೇಡಿ.
+lvl10_hint,Look for a wire that goes straight from one end of the battery to the other.,ಬ್ಯಾಟರಿಯ ಒಂದು ತುದಿಯಿಂದ ಇನ್ನೊಂದು ತುದಿಗೆ ನೇರವಾಗಿ ಹೋಗುವ ತಂತಿಯನ್ನು ಹುಡುಕಿ.
+lvl11_title,Level 11. Fault hunt.,ಹಂತ ಹನ್ನೊಂದು. ದೋಷ ಹುಡುಕಾಟ.
+lvl11_learn,Now you are the electrician.,ಈಗ ನೀವೇ ಎಲೆಕ್ಟ್ರಿಷಿಯನ್.
+lvl11_task,Two things are wrong in this circuit. Find and fix both.,ಈ ಮಂಡಲದಲ್ಲಿ ಎರಡು ತಪ್ಪುಗಳಿವೆ. ಎರಡನ್ನೂ ಹುಡುಕಿ ಸರಿಪಡಿಸಿ.
+lvl11_done,Excellent detective work! Both faults are fixed.,ಅದ್ಭುತ ಪತ್ತೇದಾರಿ ಕೆಲಸ! ಎರಡೂ ದೋಷಗಳು ಸರಿಯಾದವು.
+lvl12_title,Level 12. Final challenge.,ಹಂತ ಹನ್ನೆರಡು. ಕೊನೆಯ ಸವಾಲು.
+lvl12_learn,This is the final challenge. Use everything you have learned.,ಇದು ಕೊನೆಯ ಸವಾಲು. ನೀವು ಕಲಿತ ಎಲ್ಲವನ್ನೂ ಬಳಸಿ.
+lvl12_task,Build a circuit where one switch turns two bulbs on and off together. Both bulbs must glow brightly.,ಒಂದೇ ಸ್ವಿಚ್ ಎರಡು ಬಲ್ಬ್‌ಗಳನ್ನು ಒಟ್ಟಿಗೆ ಆನ್ ಮತ್ತು ಆಫ್ ಮಾಡುವಂತೆ ಮಂಡಲ ಮಾಡಿ. ಎರಡೂ ಬಲ್ಬ್ ಜೋರಾಗಿ ಉರಿಯಬೇಕು.
+lvl12_done,You did it! Two bulbs in parallel with one switch.,ನೀವು ಮಾಡಿಬಿಟ್ಟಿರಿ! ಒಂದೇ ಸ್ವಿಚ್ ಜೊತೆ ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಎರಡು ಬಲ್ಬ್.
+lvl12_hint,"Put the bulbs in parallel. Put the switch next to the battery, before the paths split.","ಬಲ್ಬ್‌ಗಳನ್ನು ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಇಡಿ. ದಾರಿಗಳು ಬೇರೆಯಾಗುವ ಮೊದಲು, ಬ್ಯಾಟರಿಯ ಪಕ್ಕದಲ್ಲಿ ಸ್ವಿಚ್ ಇಡಿ."
+cancelled,Cancelled.,ರದ್ದುಮಾಡಲಾಗಿದೆ.
+exit_blocked_back,"To leave, swipe left twice with two fingers.",ಹೊರಹೋಗಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ಎಡಕ್ಕೆ ಎರಡು ಬಾರಿ ಸ್ವೈಪ್ ಮಾಡಿ.
+exit_confirm,Swipe left again to leave.,ಹೊರಹೋಗಲು ಮತ್ತೆ ಎಡಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ.
+fault_correct,You found the fault!,ನೀವು ತಪ್ಪು ಕಂಡುಹಿಡಿದಿರಿ!
+fault_q_f1,Nothing lights up. Trace the loop and tap the broken part.,ಏನೂ ಹೊಳೆಯುತ್ತಿಲ್ಲ. ಮಾರ್ಗವನ್ನು ಪತ್ತೆಹಚ್ಚಿ ಮುರಿದ ಭಾಗ ತಟ್ಟಿ.
+fault_q_f10,The bulb glows red and looks dangerous. Tap the part causing it.,ಬಲ್ಬ್ ಕೆಂಪು ಬಣ್ಣದಲ್ಲಿ ಹೊಳೆಯುತ್ತಿದೆ ಮತ್ತು ಅಪಾಯಕಾರಿಯಾಗಿ ಕಾಣುತ್ತದೆ. ಅದಕ್ಕೆ ಕಾರಣವಾದ ಭಾಗ ತಟ್ಟಿ.
+fault_q_f2,Nothing lights up. Find out why and tap the broken part.,ಏನೂ ಹೊಳೆಯುತ್ತಿಲ್ಲ. ಕಾರಣ ಕಂಡುಹಿಡಿದು ಮುರಿದ ಭಾಗ ತಟ್ಟಿ.
+fault_q_f3,Battery in danger! There is a short circuit. Tap the wire causing it.,ಬ್ಯಾಟರಿ ಅಪಾಯದಲ್ಲಿದೆ! ಷಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್ ಇದೆ. ಅದಕ್ಕೆ ಕಾರಣವಾದ ತಂತಿ ತಟ್ಟಿ.
+fault_q_f4,"Two bulbs should glow, but one is dark. Tap the part causing the shortcut.","ಎರಡು ಬಲ್ಬ್‌ಗಳು ಹೊಳೆಯಬೇಕು, ಆದರೆ ಒಂದು ಕತ್ತಲಾಗಿದೆ. ಅಡ್ಡ ಮಾರ್ಗಕ್ಕೆ ಕಾರಣವಾದ ಭಾಗ ತಟ್ಟಿ."
+fault_q_f5,The bulb barely glows. Tap the part that is blocking the current.,ಬಲ್ಬ್ ಬಹುತೇಕ ಹೊಳೆಯುತ್ತಿಲ್ಲ. ವಿದ್ಯುತ್ ಅನ್ನು ತಡೆಯುತ್ತಿರುವ ಭಾಗ ತಟ್ಟಿ.
+fault_q_f6,"Two bulbs in series, both dark. One bulb is dead. Tap it.","ಸರಣಿಯಲ್ಲಿ ಎರಡು ಬಲ್ಬ್‌ಗಳು, ಎರಡೂ ಕತ್ತಲಾಗಿವೆ. ಒಂದು ಬಲ್ಬ್ ಸತ್ತಿದೆ. ಅದನ್ನು ತಟ್ಟಿ."
+fault_q_f7,"Two bulbs in parallel, one is dark. Tap the broken part on its branch.","ಸಮಾಂತರದಲ್ಲಿ ಎರಡು ಬಲ್ಬ್‌ಗಳು, ಒಂದು ಕತ್ತಲಾಗಿದೆ. ಅದರ ಕವಲಿನಲ್ಲಿ ಮುರಿದ ಭಾಗ ತಟ್ಟಿ."
+fault_q_f8,"Two batteries, but nothing glows. Tap the one facing the wrong way.","ಎರಡು ಬ್ಯಾಟರಿಗಳು, ಆದರೆ ಏನೂ ಹೊಳೆಯುತ್ತಿಲ್ಲ. ತಪ್ಪು ದಿಕ್ಕಿನಲ್ಲಿರುವುದನ್ನು ತಟ್ಟಿ."
+fault_q_f9,The bulb is dark. One wire leads to a dead end. Tap it.,ಬಲ್ಬ್ ಕತ್ತಲಾಗಿದೆ. ಒಂದು ತಂತಿ ಎಲ್ಲಿಗೂ ಹೋಗುವುದಿಲ್ಲ. ಅದನ್ನು ತಟ್ಟಿ.
+fault_wrong,Not that one — try again.,ಅದು ಅಲ್ಲ — ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.
+help,"One finger: swipe to move. Tap once to repeat where you are. Double tap for wire. Triple tap for bulb. Four taps for resistor. Hold for battery. Tap, then hold, for switch. After choosing a part, swipe to place it; tap once to cancel. Two fingers: tap to run or stop. Hold for a summary. Swipe down to remove the part here. Swipe up to toggle a switch here. Swipe right to undo. Double tap for the guided lesson. Swipe left twice to leave. Three finger tap to hear this again.","ಒಂದು ಬೆರಳು: ಚಲಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಈಗಿರುವ ಸ್ಥಳವನ್ನು ಮತ್ತೆ ಕೇಳಲು ಒಮ್ಮೆ ತಟ್ಟಿ. ತಂತಿಗೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ. ಬಲ್ಬ್‌ಗೆ ಮೂರು ಬಾರಿ ತಟ್ಟಿ. ರೆಸಿಸ್ಟರ್‌ಗೆ ನಾಲ್ಕು ಬಾರಿ ತಟ್ಟಿ. ಬ್ಯಾಟರಿಗೆ ಒತ್ತಿ ಹಿಡಿಯಿರಿ. ಸ್ವಿಚ್‌ಗೆ ಒಮ್ಮೆ ತಟ್ಟಿ, ನಂತರ ಒತ್ತಿ ಹಿಡಿಯಿರಿ. ಭಾಗ ಆರಿಸಿದ ಮೇಲೆ ಅದನ್ನು ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ; ರದ್ದು ಮಾಡಲು ಒಮ್ಮೆ ತಟ್ಟಿ. ಎರಡು ಬೆರಳುಗಳಿಂದ: ಚಾಲನೆ ಮಾಡಲು ಅಥವಾ ನಿಲ್ಲಿಸಲು ತಟ್ಟಿ. ಸಾರಾಂಶ ಕೇಳಲು ಒತ್ತಿ ಹಿಡಿಯಿರಿ. ಇಲ್ಲಿರುವ ಭಾಗ ತೆಗೆಯಲು ಕೆಳಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಸ್ವಿಚ್ ಬದಲಿಸಲು ಮೇಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಹಿಂದಿನ ಹಂತಕ್ಕೆ ಹೋಗಲು ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ಮಾರ್ಗದರ್ಶಿ ಪಾಠಕ್ಕೆ ಎರಡು ಬಾರಿ ತಟ್ಟಿ. ಹೊರಹೋಗಲು ಎಡಕ್ಕೆ ಎರಡು ಬಾರಿ ಸ್ವೈಪ್ ಮಾಡಿ. ಸಹಾಯವನ್ನು ಮತ್ತೆ ಕೇಳಲು ಮೂರು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ."
+is_back,is back.,ಮತ್ತೆ ಬಂದಿದೆ.
+lesson_compare,"Listen. In parallel, both bulbs shine at full brightness, and the hum is louder.","ಕೇಳಿ. ಸಮಾಂತರದಲ್ಲಿ ಎರಡೂ ಬಲ್ಬ್‌ಗಳು ಪೂರ್ಣವಾಗಿ ಹೊಳೆಯುತ್ತವೆ, ಮತ್ತು ಗುಂಯ್ ಶಬ್ದ ಇನ್ನೂ ಜೋರಾಗಿರುತ್ತದೆ."
+lesson_complete,You finished the guided lesson. Great work.,ಮಾರ್ಗದರ್ಶಿ ಪಾಠವನ್ನು ಮುಗಿಸಿದ್ದೀರಿ. ತುಂಬಾ ಚೆನ್ನಾಗಿದೆ.
+lesson_good,Good.,ಚೆನ್ನಾಗಿದೆ.
+lesson_intro,"Let's build your first circuit together. I'll guide you, one tap at a time. If you make a mistake, swipe right with two fingers to undo.","ಬನ್ನಿ, ನಿಮ್ಮ ಮೊದಲ ಮಂಡಲವನ್ನು ಒಟ್ಟಿಗೆ ಕಟ್ಟೋಣ. ಒಂದೊಂದೇ ಸ್ಪರ್ಶದಲ್ಲಿ ನಿಮಗೆ ಮಾರ್ಗದರ್ಶನ ನೀಡುತ್ತೇನೆ. ತಪ್ಪಾದರೆ, ಹಿಂದಕ್ಕೆ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ಬಲಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_parallel_intro,"Now rebuild this in parallel. Two finger swipe down on a bulb to remove it, then use taps to add wires and a second bulb so two bulbs connect between the same two points.","ಈಗ ಇದನ್ನು ಸಮಾಂತರವಾಗಿ ಮತ್ತೆ ಕಟ್ಟಿ. ಒಂದು ಬಲ್ಬ್ ತೆಗೆಯಲು ಅದರ ಮೇಲೆ ಎರಡು ಬೆರಳುಗಳಿಂದ ಕೆಳಕ್ಕೆ ಸ್ವೈಪ್ ಮಾಡಿ. ನಂತರ ತಂತಿಗಳನ್ನು ಮತ್ತು ಇನ್ನೊಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ, ಎರಡೂ ಬಲ್ಬ್‌ಗಳು ಒಂದೇ ಎರಡು ಬಿಂದುಗಳ ನಡುವೆ ಸಂಪರ್ಕವಾಗುವಂತೆ ಮಾಡಿ."
+lesson_parallel_ready,Your parallel circuit is ready. Two finger tap to run it.,ನಿಮ್ಮ ಸಮಾಂತರ ಮಂಡಲ ಸಿದ್ಧವಾಗಿದೆ. ಚಾಲನೆ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ.
+lesson_series_ready,Your circuit is ready. Two finger tap to run it and listen.,ನಿಮ್ಮ ಮಂಡಲ ಸಿದ್ಧವಾಗಿದೆ. ಚಾಲನೆ ಮಾಡಿ ಕೇಳಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ತಟ್ಟಿ.
+lesson_series_result,That's the hum of two bulbs in series. Two finger tap again when you're ready to rebuild it in parallel.,ಇದು ಸರಣಿಯಲ್ಲಿ ಇರುವ ಎರಡು ಬಲ್ಬ್‌ಗಳ ಗುಂಯ್ ಶಬ್ದ. ಸಮಾಂತರದಲ್ಲಿ ಮತ್ತೆ ಕಟ್ಟಲು ಸಿದ್ಧರಾದಾಗ ಎರಡು ಬೆರಳುಗಳಿಂದ ಮತ್ತೆ ತಟ್ಟಿ.
+lesson_step_battery,"First, place a battery. Tap and hold anywhere, then swipe where it should go.","ಮೊದಲು, ಬ್ಯಾಟರಿ ಇಡಿ. ಎಲ್ಲಿಯಾದರೂ ಒತ್ತಿ ಹಿಡಿದು, ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_bulb1,"Now add a bulb. Triple tap, then swipe where it should go.","ಈಗ ಒಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ. ಮೂರು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_bulb2,"Now add another bulb. Triple tap, then swipe where it should go.","ಈಗ ಇನ್ನೊಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ. ಮೂರು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಅದು ಇರಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ."
+lesson_step_close_loop,"Now close the loop with a wire. Double tap, then swipe to place it.","ಈಗ ತಂತಿಯಿಂದ ಲೂಪ್ ಮುಚ್ಚಿ. ಎರಡು ಬಾರಿ ತಟ್ಟಿ, ನಂತರ ಇಡಲು ಸ್ವೈಪ್ ಮಾಡಿ."
+nothing_to_undo,Nothing to undo.,ಹಿಂದಕ್ಕೆ ಮಾಡಲು ಏನೂ ಇಲ್ಲ.
+predict_q_p1,"Battery, a closed switch, and one bulb. Will the bulb glow?","ಬ್ಯಾಟರಿ, ಮುಚ್ಚಿದ ಸ್ವಿಚ್, ಮತ್ತು ಒಂದು ಬಲ್ಬ್. ಬಲ್ಬ್ ಹೊಳೆಯುತ್ತದೆಯೇ?"
+predict_q_p10,"Two bulbs in series, then a wire is placed directly across Bulb A. What happens?","ಸರಣಿಯಲ್ಲಿ ಎರಡು ಬಲ್ಬ್‌ಗಳು, ನಂತರ ಬಲ್ಬ್ A ಅಡ್ಡಲಾಗಿ ಒಂದು ತಂತಿ ಹಾಕಲಾಗಿದೆ. ಏನಾಗುತ್ತದೆ?"
+predict_q_p2,"Same circuit, but the switch is OPEN. Will the bulb glow?","ಅದೇ ಸರ್ಕ್ಯೂಟ್, ಆದರೆ ಸ್ವಿಚ್ ತೆರೆದಿದೆ. ಬಲ್ಬ್ ಹೊಳೆಯುತ್ತದೆಯೇ?"
+predict_q_p3,"Two bulbs in SERIES, compared to one bulb alone. Each bulb will be…","ಸರಣಿಯಲ್ಲಿ ಎರಡು ಬಲ್ಬ್‌ಗಳು, ಒಂದೇ ಬಲ್ಬ್‌ಗೆ ಹೋಲಿಸಿದರೆ. ಪ್ರತಿ ಬಲ್ಬ್ ಹೀಗಿರುತ್ತದೆ…"
+predict_q_p4,"Two bulbs in PARALLEL. Each bulb, compared to one bulb alone…",ಸಮಾಂತರದಲ್ಲಿ ಎರಡು ಬಲ್ಬ್‌ಗಳು. ಒಂದೇ ಬಲ್ಬ್‌ಗೆ ಹೋಲಿಸಿದರೆ ಪ್ರತಿ ಬಲ್ಬ್…
+predict_q_p5,"Two bulbs were in series. One bulb is removed, leaving a gap. The other bulb will…","ಎರಡು ಬಲ್ಬ್‌ಗಳು ಸರಣಿಯಲ್ಲಿದ್ದವು. ಒಂದು ಬಲ್ಬ್ ತೆಗೆಯಲಾಗಿದೆ, ಒಂದು ಅಂತರ ಉಳಿದಿದೆ. ಇನ್ನೊಂದು ಬಲ್ಬ್…"
+predict_q_p6,Two bulbs were in parallel. One bulb is removed. The other bulb will…,ಎರಡು ಬಲ್ಬ್‌ಗಳು ಸಮಾಂತರದಲ್ಲಿದ್ದವು. ಒಂದು ಬಲ್ಬ್ ತೆಗೆಯಲಾಗಿದೆ. ಇನ್ನೊಂದು ಬಲ್ಬ್…
+predict_q_p7,"A bulb plus a 10Ω resistor, compared to the bulb alone. The bulb will be…","ಬಲ್ಬ್ ಮತ್ತು 10Ω ರೆಸಿಸ್ಟರ್, ಒಂಟಿ ಬಲ್ಬ್‌ಗೆ ಹೋಲಿಸಿದರೆ. ಬಲ್ಬ್ ಹೀಗಿರುತ್ತದೆ…"
+predict_q_p8,Now the resistor is 100Ω instead of 10Ω. The bulb will be…,ಈಗ ರೆಸಿಸ್ಟರ್ 10Ω ಬದಲು 100Ω ಆಗಿದೆ. ಬಲ್ಬ್ ಹೀಗಿರುತ್ತದೆ…
+predict_q_p9,"The battery changes from 3V to 9V, same single bulb. The bulb will be…","ಬ್ಯಾಟರಿ 3V ನಿಂದ 9V ಗೆ ಬದಲಾಗುತ್ತದೆ, ಅದೇ ಒಂದು ಬಲ್ಬ್. ಬಲ್ಬ್ ಹೀಗಿರುತ್ತದೆ…"
+removed_suffix,removed.,ತೆಗೆದುಹಾಕಲಾಗಿದೆ.
+segment_occupied,There's already something there.,ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಒಂದು ಭಾಗ ಇದೆ.
+swipe_destination,Swipe where it should go.,ಇರಿಸಬೇಕಾದ ಕಡೆಗೆ ಸ್ವೈಪ್ ಮಾಡಿ.
+undone,Undone.,ಹಿಂದಿನ ಹಂತವನ್ನು ಹಿಂದಕ್ಕೆ ಮಾಡಲಾಗಿದೆ.
+run_starting,"Okay, running circuit.","ಸರಿ, ಸರ್ಕ್ಯೂಟ್ ಚಾಲನೆ ಮಾಡುತ್ತಿದ್ದೇನೆ."
+build_run_ok,Circuit results updated.,ವಲಯದ ಫಲಿತಾಂಶ ಬಂದಿದೆ.
+build_run_error,The circuit needs another look. Check the connections and try again.,ವಲಯವನ್ನು ಮತ್ತೆ ನೋಡಿ. ಸಂಪರ್ಕಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಪ್ರಯತ್ನಿಸಿ.
