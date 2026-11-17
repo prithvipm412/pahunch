@@ -9,7 +9,16 @@ export interface CircuitDescription {
   topology: Topology
 }
 
-const COMPONENT_TYPES: ComponentType[] = ['battery', 'bulb', 'resistor', 'switch', 'wire']
+const COMPONENT_TYPES: ComponentType[] = [
+  'battery',
+  'bulb',
+  'resistor',
+  'switch',
+  'wire',
+  'ammeter',
+  'voltmeter',
+  'fuse',
+]
 
 function emptyCounts(): Record<ComponentType, number> {
   const counts = {} as Record<ComponentType, number>

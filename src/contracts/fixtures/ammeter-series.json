@@ -1,0 +1,38 @@
+{
+  "name": "ammeter in series reads the loop current",
+  "netlist": {
+    "gridSize": 2,
+    "source": "build",
+    "components": [
+      {
+        "id": "battery1",
+        "type": "battery",
+        "from": { "row": 0, "col": 0 },
+        "to": { "row": 0, "col": 1 }
+      },
+      {
+        "id": "ammeter1",
+        "type": "ammeter",
+        "from": { "row": 0, "col": 1 },
+        "to": { "row": 1, "col": 1 }
+      },
+      {
+        "id": "bulb1",
+        "type": "bulb",
+        "from": { "row": 1, "col": 1 },
+        "to": { "row": 1, "col": 0 }
+      },
+      {
+        "id": "wire1",
+        "type": "wire",
+        "from": { "row": 1, "col": 0 },
+        "to": { "row": 0, "col": 0 }
+      }
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "errors": [],
+    "bulbStates": { "bulb1": "normal", "ammeter1": "normal" }
+  }
+}

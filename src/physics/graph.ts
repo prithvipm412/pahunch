@@ -25,7 +25,9 @@ export interface CircuitGraph {
   nodeCount: number
   finiteComponents: CircuitComponent[]
   wireEdges: WireEdge[]
-  openSwitches: CircuitComponent[]
+  // Open switches and blown fuses: deliberately excluded from both wireEdges and
+  // finiteComponents — a genuine gap in the circuit, same treatment for both.
+  openComponents: CircuitComponent[]
   islandByNode: number[]
   islandHasBattery: Set<number>
   groundNodeByIsland: Map<number, number>
@@ -37,18 +39,39 @@ export function nodeIndexOf(graph: CircuitGraph, p: GridPoint): number {
   return idx
 }
 
-export function buildGraph(netlist: Netlist): CircuitGraph {
+// Treat an ammeter as an ideal zero-resistance wire (merged into the graph, not stamped as a
+// finite resistor) rather than a literal ~0.001Ω finite resistor. That's what makes its current
+// recoverable via the same spanning-tree subtree-sum as a wire's (computeWireResults, generic
+// over any wireEdges component), AND is exactly why an ammeter wired straight across a battery
+// merges the battery's two terminal nodes and gets flagged short_circuit (validate.ts's
+// `n1 === n2` check) — the same real lesson a literal wire there teaches.
+function isAmmeter(c: CircuitComponent): boolean {
+  return c.type === 'ammeter'
+}
+
+// An intact fuse also behaves like a wire (zero resistance) until it blows; `blownFuseIds`
+// (computed by solve()'s iterative re-solve loop, not part of the netlist itself) says which
+// fuses have already blown and must instead be treated as a gap, like an open switch.
+function isIntactFuse(c: CircuitComponent, blownFuseIds: ReadonlySet<string>): boolean {
+  return c.type === 'fuse' && !blownFuseIds.has(c.id)
+}
+
+function isBlownFuse(c: CircuitComponent, blownFuseIds: ReadonlySet<string>): boolean {
+  return c.type === 'fuse' && blownFuseIds.has(c.id)
+}
+
+export function buildGraph(netlist: Netlist, blownFuseIds: ReadonlySet<string> = new Set()): CircuitGraph {
   const wireUF = new UnionFind()
   const wireEdges: WireEdge[] = []
-  const openSwitches: CircuitComponent[] = []
+  const openComponents: CircuitComponent[] = []
   const finiteComponents: CircuitComponent[] = []
 
   for (const c of netlist.components) {
-    if (c.type === 'wire' || isClosedSwitch(c)) {
+    if (c.type === 'wire' || isClosedSwitch(c) || isAmmeter(c) || isIntactFuse(c, blownFuseIds)) {
       const isTree = wireUF.union(pointKey(c.from), pointKey(c.to))
       wireEdges.push({ component: c, isTree })
-    } else if (isOpenSwitch(c)) {
-      openSwitches.push(c)
+    } else if (isOpenSwitch(c) || isBlownFuse(c, blownFuseIds)) {
+      openComponents.push(c)
     } else {
       finiteComponents.push(c)
     }
@@ -119,15 +142,19 @@ export function buildGraph(netlist: Netlist): CircuitGraph {
     nodeCount,
     finiteComponents,
     wireEdges,
-    openSwitches,
+    openComponents,
     islandByNode,
     islandHasBattery,
     groundNodeByIsland,
   }
 }
 
-// Connectivity between a and b using every component except excludeComponentId
-// (closed switches and wires merge nodes; resistors/bulbs/batteries also conduct).
+// Connectivity between a and b using every component except excludeComponentId (closed switches
+// and wires merge nodes; resistors/bulbs/batteries/voltmeters also conduct, however little
+// current a voltmeter's huge resistance lets through — same as any other finite resistance here.
+// Ammeter and fuse conduct too: this is a purely structural, pre-solve check with no notion of a
+// fuse having blown yet, so — like buildGraph's default `blownFuseIds` — every fuse here is
+// assumed intact).
 export function pointsConnectedExcluding(
   netlist: Netlist,
   excludeComponentId: string,
@@ -142,7 +169,10 @@ export function pointsConnectedExcluding(
       isClosedSwitch(c) ||
       c.type === 'resistor' ||
       c.type === 'bulb' ||
-      c.type === 'battery'
+      c.type === 'battery' ||
+      c.type === 'ammeter' ||
+      c.type === 'voltmeter' ||
+      c.type === 'fuse'
     ) {
       uf.union(pointKey(c.from), pointKey(c.to))
     }

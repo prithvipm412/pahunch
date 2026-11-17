@@ -134,6 +134,13 @@ const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
   bulb: 'place_bulb',
   resistor: 'place_resistor',
   switch: 'place_switch',
+  // Not reachable yet — same as clips.ts's ammeter/voltmeter/fuse entries, kept here only so
+  // this Record stays total. Reused by physical analogy (ammeter/fuse are wire-like when
+  // intact; voltmeter is a high-resistance finite component, closer to a resistor) rather than
+  // inventing unused new haptic patterns in src/audio/haptics.ts.
+  ammeter: 'place_wire',
+  fuse: 'place_wire',
+  voltmeter: 'place_resistor',
 }
 
 // haptic, then (once its pattern finishes + a small buffer) the speech — see SPEECH_AFTER_HAPTIC_MS.

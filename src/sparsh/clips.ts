@@ -17,6 +17,13 @@ export const CLIPS = {
   resistor: 'resistor',
   switch: 'switch',
   wire: 'wire',
+  // Ammeter/voltmeter/fuse aren't reachable from Sparsh yet — PICKER_ORDER (gestureMap.ts)
+  // doesn't offer them, so these clips are currently unused. Added only so `partClipFor` (a
+  // generic `ComponentType -> ClipName` mapping below) stays total now that physics/contracts
+  // support the three new types; giving Sparsh an actual picker/lesson for them is separate work.
+  ammeter: 'ammeter',
+  voltmeter: 'voltmeter',
+  fuse: 'fuse',
   swipe_destination: 'Swipe where it should go.',
   placed: 'Placed',
   removed: 'Removed',

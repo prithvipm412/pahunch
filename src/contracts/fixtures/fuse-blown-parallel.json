@@ -1,0 +1,46 @@
+{
+  "name": "a 0.25A fuse blows under two parallel bulbs' combined current, turning both off",
+  "netlist": {
+    "gridSize": 4,
+    "source": "build",
+    "components": [
+      {
+        "id": "battery1",
+        "type": "battery",
+        "from": { "row": 0, "col": 0 },
+        "to": { "row": 0, "col": 1 }
+      },
+      {
+        "id": "fuse1",
+        "type": "fuse",
+        "value": 0.25,
+        "from": { "row": 0, "col": 1 },
+        "to": { "row": 0, "col": 2 }
+      },
+      {
+        "id": "bulb1",
+        "type": "bulb",
+        "from": { "row": 0, "col": 2 },
+        "to": { "row": 0, "col": 3 }
+      },
+      {
+        "id": "bulb2",
+        "type": "bulb",
+        "from": { "row": 0, "col": 2 },
+        "to": { "row": 0, "col": 3 }
+      },
+      {
+        "id": "wire1",
+        "type": "wire",
+        "from": { "row": 0, "col": 3 },
+        "to": { "row": 0, "col": 0 }
+      }
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "errors": [],
+    "warnings": ["fuse_blown:fuse1"],
+    "bulbStates": { "bulb1": "off", "bulb2": "off", "fuse1": "blown" }
+  }
+}

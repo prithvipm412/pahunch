@@ -42,7 +42,16 @@ describe('describeCircuit topology', () => {
     const netlist: Netlist = { gridSize: 5, components: [], source: 'sparsh' }
     const result = describeCircuit(netlist)
     expect(result.topology).toBe('empty')
-    expect(result.counts).toEqual({ battery: 0, bulb: 0, resistor: 0, switch: 0, wire: 0 })
+    expect(result.counts).toEqual({
+      battery: 0,
+      bulb: 0,
+      resistor: 0,
+      switch: 0,
+      wire: 0,
+      ammeter: 0,
+      voltmeter: 0,
+      fuse: 0,
+    })
   })
 
   it('reports incomplete when there is no battery', () => {
@@ -59,7 +68,16 @@ describe('describeCircuit topology', () => {
 
   it('counts each component type, including zero counts', () => {
     const result = describeCircuit(twoBulbsSeries.netlist as Netlist)
-    expect(result.counts).toEqual({ battery: 1, bulb: 2, resistor: 0, switch: 0, wire: 1 })
+    expect(result.counts).toEqual({
+      battery: 1,
+      bulb: 2,
+      resistor: 0,
+      switch: 0,
+      wire: 1,
+      ammeter: 0,
+      voltmeter: 0,
+      fuse: 0,
+    })
   })
 
   it('reports mixed for a bulb in series with a parallel pair', () => {

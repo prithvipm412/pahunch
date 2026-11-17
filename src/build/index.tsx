@@ -15,6 +15,10 @@ import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from '
 
 const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
   wire: 'place_wire', battery: 'place_battery', bulb: 'place_bulb', resistor: 'place_resistor', switch: 'place_switch',
+  // Not placeable from the tray yet (see `parts` below) — kept only so this Record stays total
+  // now that ComponentType has grown. Reused by physical analogy: ammeter/fuse are wire-like
+  // when intact, voltmeter is a high-resistance finite component, closer to a resistor.
+  ammeter: 'place_wire', fuse: 'place_wire', voltmeter: 'place_resistor',
 }
 
 const parts: { type: ComponentType; key: TranslationKey; icon: string }[] = [

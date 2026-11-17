@@ -5,13 +5,18 @@ import {
   DEFAULT_BATTERY_VOLTAGE,
   DEFAULT_BULB_RESISTANCE,
   DEFAULT_RESISTOR_RESISTANCE,
+  VOLTMETER_RESISTANCE,
 } from './constants'
 import type { CircuitGraph } from './graph'
 import { nodeIndexOf } from './graph'
 
+// Only called for graph.finiteComponents — bulb/resistor/battery/voltmeter. Ammeter and intact
+// fuse are merged into the graph like a wire (see graph.ts), so they never reach here; a blown
+// fuse and an open switch are excluded from finiteComponents entirely.
 export function resistanceOf(c: CircuitComponent): number {
   if (c.type === 'bulb') return c.value ?? DEFAULT_BULB_RESISTANCE
   if (c.type === 'resistor') return c.value ?? DEFAULT_RESISTOR_RESISTANCE
+  if (c.type === 'voltmeter') return VOLTMETER_RESISTANCE
   throw new Error(`resistanceOf: unsupported component type ${c.type}`)
 }
 
