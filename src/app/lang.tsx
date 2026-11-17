@@ -1,4 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { t as translate, type TranslationKey } from './i18n'
 
 export type Language = 'en' | 'kn'
 interface LanguageContextValue { lang: Language; setLang: (lang: Language) => void }
@@ -19,3 +20,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
 /** Reads the current interface language. */
 export function useLanguage() { return useContext(LanguageContext) }
+
+/** Returns a language-aware translator for the current screen. */
+export function useT() {
+  const { lang } = useLanguage()
+  return (key: TranslationKey) => translate(key, lang)
+}
