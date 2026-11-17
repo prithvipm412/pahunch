@@ -1,0 +1,80 @@
+.hero-circuit-wrap {
+  position: relative;
+  display: inline-block;
+  padding: 14px;
+  margin: 9px -14px 6px -14px;
+}
+
+.hero-title {
+  margin: 0;
+}
+
+.hero-circuit-svg {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.hero-spark {
+  opacity: 0;
+  offset-rotate: auto;
+  filter: drop-shadow(0 0 4px rgba(226, 103, 46, 0.85));
+}
+
+.hero-spark-run {
+  animation: hero-spark-travel 8s ease-in-out infinite;
+}
+
+@keyframes hero-spark-travel {
+  0% { offset-distance: 0%; opacity: 1; }
+  25% { offset-distance: 100%; opacity: 1; }
+  30% { offset-distance: 100%; opacity: 0; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+
+.hero-trail {
+  opacity: 0;
+}
+
+.hero-trail-run {
+  animation: hero-trail-travel 8s ease-in-out infinite;
+}
+
+@keyframes hero-trail-travel {
+  0% { stroke-dashoffset: 0; opacity: 0.75; }
+  25% { stroke-dashoffset: calc(-1 * var(--path-length, 0px) - 36px); opacity: 0.75; }
+  30% { opacity: 0; }
+  100% { opacity: 0; }
+}
+
+.hero-bulb-halo {
+  fill: #e2672e;
+  filter: blur(4px);
+  animation: hero-bulb-pulse 8s ease-in-out infinite, hero-bulb-breathe 3.6s ease-in-out infinite;
+}
+
+.hero-bulb-halo-static {
+  opacity: 0.4;
+  animation: none;
+}
+
+@keyframes hero-bulb-pulse {
+  0% { opacity: 0.85; }
+  15% { opacity: 0.4; }
+  100% { opacity: 0.4; }
+}
+
+@keyframes hero-bulb-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-spark-run,
+  .hero-trail-run,
+  .hero-bulb-halo {
+    animation: none !important;
+  }
+}

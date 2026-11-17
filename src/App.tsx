@@ -6,6 +6,7 @@ import SparshScreen from './sparsh'
 import LearnScreen from './learn'
 import { LanguageProvider, useLanguage, useT } from './app/lang'
 import CircuitBackground from './app/CircuitBackground'
+import HeroCircuit from './app/HeroCircuit'
 import './app/app.css'
 import { stopAll, unlockAudio } from './audio'
 
@@ -96,14 +97,7 @@ function Home() {
       </header>
       <section className="home-intro">
         <p className="eyebrow">{t('homeEyebrow')}</p>
-        <h1 className="hero-title">
-          Pahunch
-          <svg className="hero-bulb" viewBox="0 0 48 48" aria-hidden="true">
-            <circle cx="24" cy="20" r="13" stroke="#e2672e" strokeWidth="2.5" />
-            <path d="M18 31h12M20 36h8M24 33v6" stroke="#e2672e" strokeWidth="2.5" strokeLinecap="round" />
-            <path d="M18 16c2 4 2 8 6 8s4-4 6-8" stroke="#f1e6cf" strokeWidth="1.5" />
-          </svg>
-        </h1>
+        <HeroCircuit />
         <p className="hero-tagline">{t('welcome')}</p>
       </section>
       <nav className="mode-grid" aria-label={t('homeModes')}>
