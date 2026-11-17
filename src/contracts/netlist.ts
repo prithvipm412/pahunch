@@ -1,5 +1,6 @@
 export type ComponentType = 'battery' | 'bulb' | 'resistor' | 'switch' | 'wire'
 
+// row/col are 0-based: valid values are 0 to gridSize-1 (inclusive).
 export interface GridPoint {
   row: number
   col: number

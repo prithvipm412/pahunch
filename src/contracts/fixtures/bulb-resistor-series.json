@@ -1,0 +1,39 @@
+{
+  "name": "bulb and resistor in series",
+  "netlist": {
+    "gridSize": 4,
+    "source": "build",
+    "components": [
+      {
+        "id": "battery1",
+        "type": "battery",
+        "from": { "row": 0, "col": 0 },
+        "to": { "row": 0, "col": 1 }
+      },
+      {
+        "id": "bulb1",
+        "type": "bulb",
+        "from": { "row": 0, "col": 1 },
+        "to": { "row": 0, "col": 2 }
+      },
+      {
+        "id": "resistor1",
+        "type": "resistor",
+        "from": { "row": 0, "col": 2 },
+        "to": { "row": 0, "col": 3 },
+        "value": 10
+      },
+      {
+        "id": "wire1",
+        "type": "wire",
+        "from": { "row": 0, "col": 3 },
+        "to": { "row": 0, "col": 0 }
+      }
+    ]
+  },
+  "expected": {
+    "ok": true,
+    "errors": [],
+    "bulbStates": { "bulb1": "dim" }
+  }
+}

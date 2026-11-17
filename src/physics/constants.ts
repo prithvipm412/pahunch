@@ -1,0 +1,11 @@
+export const DEFAULT_BATTERY_VOLTAGE = 3
+export const BATTERY_INTERNAL_RESISTANCE = 0.5
+export const DEFAULT_BULB_RESISTANCE = 10
+export const DEFAULT_RESISTOR_RESISTANCE = 10
+
+export const SHORT_CIRCUIT_CURRENT_LIMIT = 2
+
+export const BULB_OFF_RATIO = 0.05
+export const BULB_DIM_RATIO = 0.5
+export const BULB_NORMAL_RATIO = 1.5
+export const BULB_BRIGHT_RATIO = 3.0
