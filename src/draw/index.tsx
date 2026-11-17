@@ -72,13 +72,13 @@ export default function DrawScreen() {
   const { size: queueSize, save: saveToQueue, isDraining } = useOfflineQueue(queueSender)
 
   const handleFile = useCallback(
-    async (file: File) => {
+    async (file: File | Blob, options?: { skipBlur?: boolean }) => {
       setPhase({ kind: 'processing' })
 
       let base64: string
       let previewUrl: string
       try {
-        const result = await processImage(file)
+        const result = await processImage(file, options)
         base64 = result.base64
         previewUrl = result.previewUrl
       } catch (err) {
@@ -163,7 +163,7 @@ export default function DrawScreen() {
         const res = await fetch(src)
         const blob = await res.blob()
         const file = new File([blob], `${name}.png`, { type: 'image/png' })
-        void handleFile(file)
+        void handleFile(file, { skipBlur: true })
       } catch {
         setPhase({
           kind: 'error',
