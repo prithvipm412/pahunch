@@ -15,21 +15,33 @@ export interface GestureMapEntry {
 
 // The part picker's cycle order for the 1-finger double-tap gesture: first double-tap (from
 // idle) always lands on 'wire'; every further double-tap advances one step, wrapping from
-// 'battery' back to 'wire'.
-export const PICKER_ORDER: ComponentType[] = ['wire', 'bulb', 'resistor', 'switch', 'battery']
+// 'fuse' back to 'wire'.
+export const PICKER_ORDER: ComponentType[] = [
+  'wire',
+  'bulb',
+  'resistor',
+  'switch',
+  'battery',
+  'ammeter',
+  'voltmeter',
+  'fuse',
+]
 
 export const GESTURE_MAP: GestureMapEntry[] = [
   {
     id: 'tap',
     gesture: 'Tap (1 finger)',
-    action: 'Speak where you are and what is there. Never cancels anything.',
+    action:
+      'Speak where you are and what is there. On an ammeter or voltmeter, once a run has given it a ' +
+      'reading, speaks that reading instead. Never cancels anything.',
   },
   {
     id: 'double_tap',
     gesture: 'Double-tap (1 finger)',
     action:
-      'Open or advance the part picker: Wire, Bulb, Resistor, Switch, Battery, then loops back to Wire. ' +
-      'Each step speaks the part and gives its vibration. On a placed switch, toggles it open or closed instead.',
+      'Open or advance the part picker: Wire, Bulb, Resistor, Switch, Battery, Ammeter, Voltmeter, Fuse, ' +
+      'then loops back to Wire. Each step speaks the part and gives its vibration. On a placed switch, ' +
+      'toggles it open or closed instead.',
   },
   {
     id: 'swipe',
@@ -45,7 +57,7 @@ export const GESTURE_MAP: GestureMapEntry[] = [
     id: 'two_finger_tap',
     gesture: 'Tap (2 fingers)',
     action:
-      'Run the circuit. Right after placing a resistor or battery, cycles its value instead and speaks it.',
+      'Run the circuit. Right after placing a resistor, battery, or fuse, cycles its value instead and speaks it.',
   },
   {
     id: 'two_finger_hold',

@@ -3,8 +3,8 @@ import { buildHelpText } from './gestureMap'
 
 // Clip names and English fallback text for speechSynthesis, until recorded audio ships under
 // public/audio/<lang>/<name>.mp3. Keep names stable — the recorded clips will reuse them.
-// Every clip here (plus the pos_r*c*/ohms_*/volts_* families, templated) is also listed in
-// clips.csv.
+// Every clip here (plus the pos_r*c*/ohms_*/volts_*/amps_* families, templated) is also listed
+// in content/lines.csv.
 export const CLIPS = {
   welcome: 'Sparsh mode. Build a circuit by touch and sound.',
   talkback_hint:
@@ -17,10 +17,8 @@ export const CLIPS = {
   resistor: 'resistor',
   switch: 'switch',
   wire: 'wire',
-  // Ammeter/voltmeter/fuse aren't reachable from Sparsh yet — PICKER_ORDER (gestureMap.ts)
-  // doesn't offer them, so these clips are currently unused. Added only so `partClipFor` (a
-  // generic `ComponentType -> ClipName` mapping below) stays total now that physics/contracts
-  // support the three new types; giving Sparsh an actual picker/lesson for them is separate work.
+  // Ammeter/voltmeter/fuse: the last three steps of the part picker (PICKER_ORDER,
+  // gestureMap.ts).
   ammeter: 'ammeter',
   voltmeter: 'voltmeter',
   fuse: 'fuse',
@@ -34,6 +32,9 @@ export const CLIPS = {
   already_resistor: 'Resistor already placed here.',
   already_switch: 'Switch already placed here.',
   already_battery: 'Battery already placed here.',
+  already_ammeter: 'Ammeter already placed here.',
+  already_voltmeter: 'Voltmeter already placed here.',
+  already_fuse: 'Fuse already placed here.',
   switch_open: 'Switch open.',
   switch_closed: 'Switch closed.',
   your_circuit_has: 'Your circuit has',
@@ -48,6 +49,7 @@ export const CLIPS = {
   state_normal: 'normal',
   state_bright: 'bright',
   state_overload: 'overloaded',
+  state_blown: 'blown',
   short_circuit: 'short circuit. Remove a wire and try again.',
   open_circuit: 'this circuit is not closed yet.',
   nothing_to_run: 'add a battery and a part before running.',
@@ -104,6 +106,19 @@ export const CLIPS = {
   volts_4_5: '4.5 volts',
   volts_6: '6 volts',
   volts_9: '9 volts',
+  // Fuse rating (amperes), same fixed-preset-clip treatment as ohms_*/volts_* above.
+  amps_0_25: '0.25 amperes',
+  amps_0_5: '0.5 amperes',
+  amps_1: '1 ampere',
+  amps_2: '2 amperes',
+
+  // Meter readings, spoken after a run (and on a single tap on the meter afterward). The fixed
+  // words below are a recorded clip (or this English fallback); the actual number is NOT one of
+  // these — it's a continuous value, so it's always synthesized live via speechSynthesis in the
+  // current language (see index.tsx's 'speakReading' effect), never looked up as a clip name.
+  ammeter_reads: 'Ammeter reads',
+  voltmeter_reads: 'Voltmeter reads',
+  fuse_blown_alarm: 'The fuse has blown. Too much current.',
 
   // Phase 3: guided lesson (1 battery, 2 bulbs — build in series, run, rebuild in parallel).
   // Phase 5 reworded the step instructions for the double-tap cycle picker (replacing the
@@ -139,11 +154,22 @@ const CLIPS_KN: Partial<Record<ClipName, string>> = {
   run_starting: 'ಸರಿ, ಸರ್ಕ್ಯೂಟ್ ಚಾಲನೆ ಮಾಡುತ್ತಿದ್ದೇನೆ.',
   ohms_5: 'ಐದು ಓಮ್', ohms_10: 'ಹತ್ತು ಓಮ್', ohms_20: 'ಇಪ್ಪತ್ತು ಓಮ್', ohms_50: 'ಐವತ್ತು ಓಮ್', ohms_100: 'ನೂರು ಓಮ್',
   volts_1_5: 'ಒಂದೂವರೆ ವೋಲ್ಟ್', volts_3: 'ಮೂರು ವೋಲ್ಟ್', volts_4_5: 'ನಾಲ್ಕೂವರೆ ವೋಲ್ಟ್', volts_6: 'ಆರು ವೋಲ್ಟ್', volts_9: 'ಒಂಬತ್ತು ವೋಲ್ಟ್',
+  amps_0_25: 'ಕಾಲು ಆಂಪಿಯರ್', amps_0_5: 'ಅರ್ಧ ಆಂಪಿಯರ್', amps_1: 'ಒಂದು ಆಂಪಿಯರ್', amps_2: 'ಎರಡು ಆಂಪಿಯರ್',
   already_wire: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ತಂತಿ ಇದೆ.',
   already_bulb: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಬಲ್ಬ್ ಇದೆ.',
   already_resistor: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ರೋಧಕ ಇದೆ.',
   already_switch: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಸ್ವಿಚ್ ಇದೆ.',
   already_battery: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಬ್ಯಾಟರಿ ಇದೆ.',
+  already_ammeter: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಅಮ್ಮೀಟರ್ ಇದೆ.',
+  already_voltmeter: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ವೋಲ್ಟ್‌ಮೀಟರ್ ಇದೆ.',
+  already_fuse: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಫ್ಯೂಸ್ ಇದೆ.',
+  ammeter: 'ಅಮ್ಮೀಟರ್',
+  voltmeter: 'ವೋಲ್ಟ್‌ಮೀಟರ್',
+  fuse: 'ಫ್ಯೂಸ್',
+  state_blown: 'ಸುಟ್ಟಿದೆ',
+  ammeter_reads: 'ಅಮ್ಮೀಟರ್ ತೋರಿಸುತ್ತದೆ',
+  voltmeter_reads: 'ವೋಲ್ಟ್‌ಮೀಟರ್ ತೋರಿಸುತ್ತದೆ',
+  fuse_blown_alarm: 'ಫ್ಯೂಸ್ ಸುಟ್ಟುಹೋಗಿದೆ. ಹೆಚ್ಚು ವಿದ್ಯುತ್ ಹರಿದಿದೆ.',
 }
 
 export function fallbackFor(name: ClipName, lang: 'en' | 'kn' = 'en'): string {
@@ -189,6 +215,21 @@ export function voltsClipFor(value: number): ClipName {
   return VOLTS_CLIPS[value]
 }
 
+const AMPS_CLIPS: Record<number, ClipName> = { 0.25: 'amps_0_25', 0.5: 'amps_0_5', 1: 'amps_1', 2: 'amps_2' }
+
+export function ampsClipFor(value: number): ClipName {
+  return AMPS_CLIPS[value]
+}
+
 // Iteration order for the parts summary (TWO_FINGER_HOLD). No longer a menu-cycling order —
 // that menu is gone in Phase 4 — just a stable order to report counts in.
-export const PART_MENU_ORDER: ComponentType[] = ['battery', 'bulb', 'resistor', 'switch', 'wire']
+export const PART_MENU_ORDER: ComponentType[] = [
+  'battery',
+  'bulb',
+  'resistor',
+  'switch',
+  'wire',
+  'ammeter',
+  'voltmeter',
+  'fuse',
+]

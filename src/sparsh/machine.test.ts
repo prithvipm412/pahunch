@@ -828,3 +828,135 @@ describe('sparshReducer: guided lesson', () => {
     ])
   })
 })
+
+describe('sparshReducer: ammeter, voltmeter, fuse', () => {
+  it('the picker reaches ammeter, voltmeter, and fuse after battery, each with its own vibration, then loops back to wire', () => {
+    const onBattery = choosePart(createInitialState(), 'battery')
+
+    const { state: onAmmeter, effects: ammeterEffects } = sparshReducer(onBattery, { type: 'DOUBLE_TAP' })
+    expect(onAmmeter.buildSub).toEqual({ kind: 'partChosen', partType: 'ammeter' })
+    expect(ammeterEffects[0]).toEqual({ type: 'haptic', name: 'place_ammeter' })
+
+    const { state: onVoltmeter, effects: voltmeterEffects } = sparshReducer(onAmmeter, { type: 'DOUBLE_TAP' })
+    expect(onVoltmeter.buildSub).toEqual({ kind: 'partChosen', partType: 'voltmeter' })
+    expect(voltmeterEffects[0]).toEqual({ type: 'haptic', name: 'place_voltmeter' })
+
+    const { state: onFuse, effects: fuseEffects } = sparshReducer(onVoltmeter, { type: 'DOUBLE_TAP' })
+    expect(onFuse.buildSub).toEqual({ kind: 'partChosen', partType: 'fuse' })
+    expect(fuseEffects[0]).toEqual({ type: 'haptic', name: 'place_fuse' })
+
+    const { state: backToWire } = sparshReducer(onFuse, { type: 'DOUBLE_TAP' })
+    expect(backToWire.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
+  })
+
+  it('swiping onto an occupied segment names ammeter/voltmeter/fuse specifically, not the generic message', () => {
+    for (const partType of ['ammeter', 'voltmeter', 'fuse'] as const) {
+      const placed = placePartHere(createInitialState(), partType, 'right') // part (0,0)->(0,1); cursor -> (0,1)
+      const refused = sparshReducer(choosePart(placed, 'bulb'), { type: 'SWIPE', direction: 'left' })
+      expect(refused.effects).toEqual([
+        { type: 'haptic', name: 'invalid' },
+        { type: 'delay', ms: 190 },
+        { type: 'speak', clips: [`already_${partType}`] },
+      ])
+    }
+  })
+
+  it('cycles a placed fuse through 0.25/0.5/1/2 amperes and loops, speaking it', () => {
+    let state = placePartHere(createInitialState(), 'fuse', 'right') // cursor -> (0,1), on the fuse
+    const expected = [1, 2, 0.25, 0.5] // starts from the 0.5A default, so the first step is 1
+    for (const value of expected) {
+      const { state: next, effects } = sparshReducer(state, { type: 'TWO_FINGER_TAP' })
+      expect(next.netlist.components[0].value).toBe(value)
+      expect(effects[0]).toEqual({ type: 'haptic', name: 'select' })
+      state = next
+    }
+
+    const { effects } = sparshReducer(placePartHere(createInitialState(), 'fuse', 'right'), { type: 'TWO_FINGER_TAP' })
+    expect(effects).toEqual([
+      { type: 'haptic', name: 'select' },
+      { type: 'speak', clips: ['fuse', 'amps_1'] },
+    ])
+  })
+
+  it("after a run, speaks each ammeter's and voltmeter's reading (words, then the live number)", () => {
+    const netlist: Netlist = {
+      gridSize: 3,
+      source: 'sparsh',
+      components: [
+        { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
+        { id: 'ammeter1', type: 'ammeter', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
+        { id: 'voltmeter1', type: 'voltmeter', from: { row: 0, col: 2 }, to: { row: 1, col: 2 } },
+      ],
+    }
+    const state: SparshState = { ...createInitialState(), netlist }
+    const result: SolveResult = {
+      ok: true,
+      errors: [],
+      warnings: [],
+      components: [
+        { id: 'battery1', voltage: 3, current: -0.27, power: 0.81, state: 'normal' },
+        { id: 'ammeter1', voltage: 0, current: -0.27, power: 0, state: 'normal' },
+        { id: 'voltmeter1', voltage: 2.7, current: 0, power: 0, state: 'off' },
+      ],
+    }
+    const { effects } = sparshReducer(state, { type: 'SOLVE_RESULT', result })
+
+    const ammeterReadsIndex = effects.findIndex((e) => e.type === 'speak' && e.clips.includes('ammeter_reads'))
+    expect(ammeterReadsIndex).toBeGreaterThanOrEqual(0)
+    expect(effects[ammeterReadsIndex + 1]).toEqual({ type: 'speakReading', kind: 'current', value: 0.27 }) // Math.abs(-0.27)
+
+    const voltmeterReadsIndex = effects.findIndex((e) => e.type === 'speak' && e.clips.includes('voltmeter_reads'))
+    expect(voltmeterReadsIndex).toBeGreaterThanOrEqual(0)
+    expect(effects[voltmeterReadsIndex + 1]).toEqual({ type: 'speakReading', kind: 'voltage', value: 2.7 })
+  })
+
+  it('gives an alarm (reusing the broken circuitStatus signal) and a spoken explanation when a fuse blows', () => {
+    const netlist: Netlist = {
+      gridSize: 3,
+      source: 'sparsh',
+      components: [
+        { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
+        { id: 'fuse1', type: 'fuse', value: 0.25, from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
+      ],
+    }
+    const state: SparshState = { ...createInitialState(), netlist }
+    const result: SolveResult = {
+      ok: true,
+      errors: [],
+      warnings: ['fuse_blown:fuse1'],
+      components: [
+        { id: 'battery1', voltage: 0, current: 0, power: 0, state: 'off' },
+        { id: 'fuse1', voltage: 3, current: 0, power: 0, state: 'blown' },
+      ],
+    }
+    const { effects } = sparshReducer(state, { type: 'SOLVE_RESULT', result })
+
+    expect(effects).toContainEqual({ type: 'circuitStatus', status: 'broken' })
+    expect(effects).toContainEqual({ type: 'speak', clips: ['fuse_blown_alarm'] })
+  })
+
+  it('a single tap on a meter with a reading from the last run speaks that reading instead of just its name', () => {
+    let state = placePartHere(createInitialState(), 'ammeter', 'right') // ammeter (0,0)->(0,1); cursor -> (0,1)
+    state = {
+      ...state,
+      lastResult: {
+        ok: true,
+        errors: [],
+        warnings: [],
+        components: [{ id: state.netlist.components[0].id, voltage: 0, current: -0.27, power: 0, state: 'normal' }],
+      },
+    }
+
+    const { effects } = sparshReducer(state, { type: 'SINGLE_TAP' })
+    expect(effects).toEqual([
+      { type: 'speak', clips: ['pos_r1c2', 'ammeter', 'ammeter_reads'] },
+      { type: 'speakReading', kind: 'current', value: 0.27 },
+    ])
+  })
+
+  it('a single tap on a meter with no run yet falls back to the generic position + part name', () => {
+    const state = placePartHere(createInitialState(), 'voltmeter', 'right')
+    const { effects } = sparshReducer(state, { type: 'SINGLE_TAP' })
+    expect(effects).toEqual([{ type: 'speak', clips: ['pos_r1c2', 'voltmeter'] }])
+  })
+})

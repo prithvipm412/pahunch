@@ -1,10 +1,11 @@
 import type { CircuitComponent, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { describeCircuit } from '../physics/describe'
-import { DEFAULT_BATTERY_VOLTAGE, DEFAULT_RESISTOR_RESISTANCE } from '../physics/constants'
+import { DEFAULT_BATTERY_VOLTAGE, DEFAULT_FUSE_RATING, DEFAULT_RESISTOR_RESISTANCE, FUSE_RATING_PRESETS } from '../physics/constants'
 import { classifyCircuitStatus, type CircuitStatus } from '../audio/feedbackSounds'
 import { hapticDurationMs, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
 import {
   alreadyClipFor,
+  ampsClipFor,
   BATTERY_VALUES,
   countClipFor,
   ohmsClipFor,
@@ -109,6 +110,10 @@ export type SparshEffect =
   // Lets a successful run's status sound/haptic land first, with the continuous sonify() tone
   // starting ~0.8s later so the two signals don't clash.
   | { type: 'delay'; ms: number }
+  // An ammeter/voltmeter reading taken straight from a solve() result — current or voltage.
+  // Spoken via live speechSynthesis (index.tsx), never a recorded clip name: unlike
+  // ohms_*/volts_*/amps_*, these are continuous values with no small fixed preset set.
+  | { type: 'speakReading'; kind: 'current' | 'voltage'; value: number }
 
 export interface SparshTransition {
   state: SparshState
@@ -134,13 +139,9 @@ const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
   bulb: 'place_bulb',
   resistor: 'place_resistor',
   switch: 'place_switch',
-  // Not reachable yet — same as clips.ts's ammeter/voltmeter/fuse entries, kept here only so
-  // this Record stays total. Reused by physical analogy (ammeter/fuse are wire-like when
-  // intact; voltmeter is a high-resistance finite component, closer to a resistor) rather than
-  // inventing unused new haptic patterns in src/audio/haptics.ts.
-  ammeter: 'place_wire',
-  fuse: 'place_wire',
-  voltmeter: 'place_resistor',
+  ammeter: 'place_ammeter',
+  voltmeter: 'place_voltmeter',
+  fuse: 'place_fuse',
 }
 
 // haptic, then (once its pattern finishes + a small buffer) the speech — see SPEECH_AFTER_HAPTIC_MS.
@@ -349,7 +350,7 @@ function advancePicker(state: SparshState): SparshTransition {
 // resting on.
 function justPlacedValueComponentAt(netlist: Netlist, point: GridPoint): CircuitComponent | undefined {
   const last = netlist.components[netlist.components.length - 1]
-  if (!last || (last.type !== 'resistor' && last.type !== 'battery')) return undefined
+  if (!last || (last.type !== 'resistor' && last.type !== 'battery' && last.type !== 'fuse')) return undefined
   if (!pointsEqual(last.from, point) && !pointsEqual(last.to, point)) return undefined
   return last
 }
@@ -359,21 +360,25 @@ function nextCycledValue(values: number[], current: number | undefined, fallback
   return values[(index + 1) % values.length]
 }
 
-function valueClipFor(type: 'resistor' | 'battery', value: number): ClipName {
-  return type === 'resistor' ? ohmsClipFor(value) : voltsClipFor(value)
+function valueClipFor(type: 'resistor' | 'battery' | 'fuse', value: number): ClipName {
+  if (type === 'resistor') return ohmsClipFor(value)
+  if (type === 'battery') return voltsClipFor(value)
+  return ampsClipFor(value)
 }
 
-// The 2-finger-tap value-cycling gesture, for a resistor or battery already on the grid. Cycles
-// RESISTOR_VALUES / BATTERY_VALUES (clips.ts) — the same presets Build mode's edit dialog offers
-// — starting from whichever preset the physics default (src/physics/constants.ts) already sits
-// at, so the very first cycle moves on from that default rather than restarting the list.
+// The 2-finger-tap value-cycling gesture, for a resistor/battery/fuse already on the grid.
+// Cycles RESISTOR_VALUES / BATTERY_VALUES / FUSE_RATING_PRESETS — the same presets Build mode's
+// edit dialog offers — starting from whichever preset the physics default
+// (src/physics/constants.ts) already sits at, so the very first cycle moves on from that
+// default rather than restarting the list.
 function cycleValue(state: SparshState, component: CircuitComponent): SparshTransition {
   const isResistor = component.type === 'resistor'
-  const values = isResistor ? RESISTOR_VALUES : BATTERY_VALUES
-  const fallback = isResistor ? DEFAULT_RESISTOR_RESISTANCE : DEFAULT_BATTERY_VOLTAGE
+  const isFuse = component.type === 'fuse'
+  const values = isResistor ? RESISTOR_VALUES : isFuse ? FUSE_RATING_PRESETS : BATTERY_VALUES
+  const fallback = isResistor ? DEFAULT_RESISTOR_RESISTANCE : isFuse ? DEFAULT_FUSE_RATING : DEFAULT_BATTERY_VOLTAGE
   const previousValue = component.value ?? fallback
   const nextValue = nextCycledValue(values, component.value, fallback)
-  const type = component.type as 'resistor' | 'battery'
+  const type = component.type as 'resistor' | 'battery' | 'fuse'
 
   return withLessonCheck({
     state: {
@@ -467,6 +472,39 @@ function runStartEffects(status: CircuitStatus): SparshEffect[] {
   ]
 }
 
+// After a successful run: each ammeter speaks "Ammeter reads" + its current, each voltmeter
+// speaks "Voltmeter reads" + its voltage (the number always via 'speakReading' — see that
+// effect's doc comment), and each freshly-blown fuse gets its own alarm (reusing the existing
+// 'broken' circuitStatus signal — haptic + the alarm() stinger) plus a spoken explanation.
+// Deliberately only called from the success branch below: a short/open circuit or "nothing to
+// run" already has its own terse explanation, and a meter reading isn't a meaningful thing to
+// report on top of that.
+function meterAndFuseEffectsFor(netlist: Netlist, result: SolveResult): SparshEffect[] {
+  const effects: SparshEffect[] = []
+  for (const component of netlist.components) {
+    const componentResult = result.components.find((c) => c.id === component.id)
+    if (!componentResult) continue
+    if (component.type === 'ammeter') {
+      effects.push(
+        { type: 'speak', clips: ['ammeter_reads'] },
+        { type: 'speakReading', kind: 'current', value: Math.abs(componentResult.current) },
+      )
+    } else if (component.type === 'voltmeter') {
+      effects.push(
+        { type: 'speak', clips: ['voltmeter_reads'] },
+        { type: 'speakReading', kind: 'voltage', value: Math.abs(componentResult.voltage) },
+      )
+    } else if (component.type === 'fuse' && componentResult.state === 'blown') {
+      effects.push(
+        { type: 'circuitStatus', status: 'broken' },
+        { type: 'delay', ms: hapticDurationMs('circuit_broken') + SPEECH_AFTER_HAPTIC_MS },
+        { type: 'speak', clips: ['fuse_blown_alarm'] },
+      )
+    }
+  }
+  return effects
+}
+
 function handleSolveResult(state: SparshState, result: SolveResult): SparshTransition {
   // classifyCircuitStatus() alone decides the haptic+sound bucket; it catches an individually
   // overloaded bulb even when result.ok is true and there's no 'short_circuit' error (that error
@@ -513,6 +551,8 @@ function handleSolveResult(state: SparshState, result: SolveResult): SparshTrans
     lesson = null
   }
 
+  const meterEffects = meterAndFuseEffectsFor(state.netlist, result)
+
   return {
     state: {
       ...state,
@@ -521,7 +561,12 @@ function handleSolveResult(state: SparshState, result: SolveResult): SparshTrans
       explore: { point: state.cursor, overComponentId: null },
       lesson,
     },
-    effects: [...start, ...(clips.length > 0 ? [{ type: 'speak', clips } as SparshEffect] : []), { type: 'sonifyStart', result }],
+    effects: [
+      ...start,
+      ...(clips.length > 0 ? [{ type: 'speak', clips } as SparshEffect] : []),
+      ...meterEffects,
+      { type: 'sonifyStart', result },
+    ],
   }
 }
 
@@ -640,6 +685,33 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
     case 'SINGLE_TAP': {
       if (state.mode !== 'build') return noChange(state)
       const component = findComponentAt(state.netlist, state.cursor)
+
+      // A meter (ammeter/voltmeter) with a reading from the last run speaks that reading
+      // instead of just naming itself — see meterAndFuseEffectsFor()'s doc comment for why a
+      // fuse isn't included here (its state_blown clip, via the generic branch below, already
+      // covers it).
+      if (component && (component.type === 'ammeter' || component.type === 'voltmeter')) {
+        const reading = state.lastResult?.components.find((c) => c.id === component.id)
+        if (reading) {
+          const kind = component.type === 'ammeter' ? 'current' : 'voltage'
+          const value = Math.abs(kind === 'current' ? reading.current : reading.voltage)
+          return {
+            state,
+            effects: [
+              {
+                type: 'speak',
+                clips: [
+                  posClipFor(state.cursor.row, state.cursor.col),
+                  partClipFor(component.type),
+                  component.type === 'ammeter' ? 'ammeter_reads' : 'voltmeter_reads',
+                ],
+              },
+              { type: 'speakReading', kind, value },
+            ],
+          }
+        }
+      }
+
       const clips: ClipName[] = [
         posClipFor(state.cursor.row, state.cursor.col),
         component ? partClipFor(component.type) : 'empty',
@@ -676,9 +748,9 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
 
     case 'TWO_FINGER_TAP': {
       if (state.mode === 'build') {
-        // Right after placing a resistor or battery, two-finger tap cycles its value instead of
-        // running — see justPlacedValueComponentAt()'s comment for why this can never shadow
-        // "run" once the student has moved on to placing something else.
+        // Right after placing a resistor, battery, or fuse, two-finger tap cycles its value
+        // instead of running — see justPlacedValueComponentAt()'s comment for why this can
+        // never shadow "run" once the student has moved on to placing something else.
         const valueComponent = justPlacedValueComponentAt(state.netlist, state.cursor)
         if (valueComponent) return cycleValue(state, valueComponent)
         return { state, effects: [{ type: 'solve' }] }

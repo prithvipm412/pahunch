@@ -20,6 +20,9 @@ export type HapticName =
   | 'place_bulb'
   | 'place_resistor'
   | 'place_switch'
+  | 'place_ammeter'
+  | 'place_voltmeter'
+  | 'place_fuse'
   | 'toggle_switch'
   | 'delete'
   | 'undo'
@@ -44,6 +47,12 @@ export const HAPTIC_PATTERNS: Record<HapticName, number | number[]> = {
   place_bulb: 30,
   place_resistor: [12, 25, 12, 25, 12],
   place_switch: [10, 20, 25],
+  // One-off exception, same as every other place_* pattern above: Sparsh-specific signatures
+  // for the three new meter/protection parts (src/sparsh), each distinct from every existing
+  // pattern so a blind student can tell them apart by feel alone.
+  place_ammeter: [20, 20, 60],
+  place_voltmeter: [60, 20, 20],
+  place_fuse: [10, 10, 10, 10, 80],
   toggle_switch: 30,
   delete: [30, 60, 10],
   undo: [10, 40, 30],

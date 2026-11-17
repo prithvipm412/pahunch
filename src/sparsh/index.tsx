@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { CircuitComponent, GridPoint } from '../contracts/netlist'
 import { solve } from '../physics'
-import { getAudioGeneration, isAudioGenerationCurrent, playSequence, sonify, stopAll, stopSonify } from '../audio'
+import { getAudioGeneration, isAudioGenerationCurrent, playClip, playSequence, sonify, stopAll, stopSonify } from '../audio'
 import { haptic, hapticForCircuitStatus } from '../audio/haptics'
 import { playCircuitStatusSound } from '../audio/feedbackSounds'
 import { useLanguage } from '../app/lang'
@@ -131,6 +131,17 @@ export default function SparshScreen() {
           token = getAudioGeneration()
         } else if (effect.type === 'navigateHome') {
           navigate('/')
+        } else if (effect.type === 'speakReading') {
+          // A continuous reading (ammeter current / voltmeter voltage), not one of the small
+          // fixed ohms_*/volts_*/amps_* preset clips — so there's no recorded clip to look up.
+          // `playClip` is given a name no real recording will ever match (it encodes the
+          // reading itself), which always falls through to its speechSynthesis fallback below,
+          // in whichever language is current.
+          const unitWord = effect.kind === 'current' ? (lang === 'kn' ? 'ಆಂಪಿಯರ್' : 'amperes') : lang === 'kn' ? 'ವೋಲ್ಟ್' : 'volts'
+          const rounded = effect.kind === 'current' ? effect.value.toFixed(2) : effect.value.toFixed(1)
+          const text = `${rounded} ${unitWord}`
+          setCaption(text)
+          await playClip(lang, `reading:${effect.kind}:${rounded}`, text)
         }
       }
     },
