@@ -832,7 +832,6 @@ const STYLES = `
     transition: background var(--transition), transform var(--transition);
     min-height: 120px;
   }
-  }
   .challenge-card:hover, .challenge-card:focus-visible {
     background: var(--clr-surface-hover);
     outline: 2px solid var(--clr-accent);
