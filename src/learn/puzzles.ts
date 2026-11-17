@@ -22,9 +22,8 @@ export interface FaultPuzzle {
   fixedNetlist: Netlist
 }
 
-// ── Puzzle 1: one bulb is silent (open wire in return path) ──────
-// Battery → bulb1 → bulb2 → (broken wire gap) → back
-// The broken wire (wire1) is the fault.
+// ── Puzzle 1: one bulb is silent (broken/misconnected return wire) ──────
+// Battery → bulb1 → bulb2 → wire1 (loose/disconnected to row 1 instead of returning to battery)
 const PUZZLE_1_BROKEN: Netlist = {
   gridSize: 4,
   source: 'build',
@@ -32,8 +31,7 @@ const PUZZLE_1_BROKEN: Netlist = {
     { id: 'battery1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 } },
     { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
     { id: 'bulb2', type: 'bulb', from: { row: 0, col: 2 }, to: { row: 0, col: 3 } },
-    // wire1 is "broken" — it doesn't connect back; here we model it as missing
-    // (open circuit: no return path). Student taps wire1 gap represented by bulb2 output.
+    { id: 'wire1', type: 'wire', from: { row: 0, col: 3 }, to: { row: 1, col: 3 } },
   ],
 }
 
@@ -101,7 +99,7 @@ export const FAULT_PUZZLES: FaultPuzzle[] = [
     promptText: 'One bulb is silent. Something is wrong in the circuit. Tap the broken part.',
     hintText: 'Hint: is there a complete path back to the battery?',
     brokenNetlist: PUZZLE_1_BROKEN,
-    faultyId: 'wire1', // the missing wire — student taps "gap" which we represent as the last bulb's output node
+    faultyId: 'wire1',
     fixedNetlist: PUZZLE_1_FIXED,
   },
   {
