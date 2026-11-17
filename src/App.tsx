@@ -5,11 +5,87 @@ import DrawScreen from './draw'
 import SparshScreen from './sparsh'
 import LearnScreen from './learn'
 import { LanguageProvider, useLanguage, useT } from './app/lang'
+import { tWith } from './app/i18n'
 import CircuitBackground from './app/CircuitBackground'
 import HeroCircuit from './app/HeroCircuit'
 import './app/app.css'
 import { stopAll, stopAllUnlessAlmostDone, unlockAudio, warmUpVoice } from './audio'
 import { haptic, isHapticsEnabled, setHapticsEnabled } from './audio/haptics'
+
+const STUDENT_NAME_KEY = 'pahunch-student-name'
+
+function AccountButton() {
+  const { lang } = useLanguage()
+  const t = useT()
+  const [open, setOpen] = useState(false)
+  const [name, setName] = useState(() => {
+    try { return localStorage.getItem(STUDENT_NAME_KEY) ?? '' } catch { return '' }
+  })
+  const [vibrationOn, setVibrationOn] = useState(() => isHapticsEnabled())
+  const buttonRef = useRef<HTMLButtonElement>(null)
+
+  const closePanel = () => {
+    setOpen(false)
+    buttonRef.current?.focus()
+  }
+  const openPanel = () => { haptic('tap'); setOpen(true) }
+
+  useEffect(() => {
+    if (!open) return
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === 'Escape') closePanel() }
+    document.addEventListener('keydown', onKeyDown)
+    return () => document.removeEventListener('keydown', onKeyDown)
+  }, [open])
+
+  const handleNameChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const next = event.target.value.trim().slice(0, 30)
+    setName(next)
+    try { localStorage.setItem(STUDENT_NAME_KEY, next) } catch { /* Storage may be disabled. */ }
+  }
+
+  const toggleVibration = () => {
+    const next = !vibrationOn
+    setHapticsEnabled(next)
+    setVibrationOn(next)
+    if (next) haptic('tap', { essential: true })
+  }
+
+  const initial = name.trim().charAt(0).toUpperCase()
+
+  return (
+    <div className="account-wrap">
+      <button
+        ref={buttonRef}
+        type="button"
+        className="brand-mark"
+        aria-label={t('account')}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => (open ? closePanel() : openPanel())}
+      >P</button>
+      {open && <>
+        <div className="account-backdrop" onClick={closePanel} />
+        <section className="account-panel" role="dialog" aria-modal="true" aria-label={t('account')} onClick={(event) => event.stopPropagation()}>
+          <button type="button" className="account-close" aria-label={t('accountClose')} onClick={closePanel}>✕</button>
+          {name && <p className="account-greeting">{tWith('hiName', lang, { name })}</p>}
+          <div className="account-avatar-row">
+            <span className="account-avatar" aria-hidden="true">{initial || '?'}</span>
+            <div className="account-name-field">
+              <label htmlFor="student-name">{t('yourName')}</label>
+              <input id="student-name" type="text" value={name} maxLength={30} placeholder={t('namePlaceholder')} onChange={handleNameChange} />
+            </div>
+          </div>
+          <div className="account-vibration-row">
+            <span>{vibrationOn ? t('vibrationOn') : t('vibrationOff')}</span>
+            <button type="button" className="account-switch" role="switch" aria-checked={vibrationOn} aria-pressed={vibrationOn} onClick={toggleVibration}>
+              <span className="account-switch-knob" aria-hidden="true" />
+            </button>
+          </div>
+        </section>
+      </>}
+    </div>
+  )
+}
 
 function AudioLifecycle() {
   const location = useLocation()
@@ -80,29 +156,20 @@ function BulbBrainIcon() {
 function Home() {
   const { lang, setLang } = useLanguage()
   const t = useT()
-  const [vibrationOn, setVibrationOn] = useState(() => isHapticsEnabled())
   const links = [
     { to: '/build', label: t('build'), Icon: ResistorIcon },
     { to: '/draw', label: t('draw'), Icon: PencilWireIcon },
     { to: '/sparsh', label: t('sparsh'), Icon: HandIcon },
     { to: '/learn', label: t('learn'), Icon: BulbBrainIcon },
   ]
-  const toggleVibration = () => {
-    const next = !vibrationOn
-    setHapticsEnabled(next)
-    setVibrationOn(next)
-    if (next) haptic('tap', { essential: true })
-  }
   return (
     <main className="home-shell">
       <header className="home-header">
-        <div className="brand-mark" aria-hidden="true">P</div>
+        <AccountButton />
         <div className="language-toggle" aria-label={t('language')}>
           <button aria-pressed={lang === 'en'} onClick={() => { haptic('tap'); stopAll(); setLang('en') }}>EN</button>
           <span aria-hidden="true">/</span>
           <button aria-pressed={lang === 'kn'} onClick={() => { haptic('tap'); stopAll(); setLang('kn') }}>ಕನ್ನಡ</button>
-          <span aria-hidden="true">/</span>
-          <button aria-pressed={vibrationOn} onClick={toggleVibration}>{vibrationOn ? t('vibrationOn') : t('vibrationOff')}</button>
         </div>
       </header>
       <section className="home-intro">

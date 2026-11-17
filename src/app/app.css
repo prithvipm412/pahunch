@@ -25,10 +25,41 @@ button { color: inherit; }
 
 .home-shell { width: min(100%, 520px); min-height: 100vh; margin: auto; padding: 20px 22px 28px; display: flex; flex-direction: column; }
 .home-header { display: flex; justify-content: space-between; align-items: center; }
-.brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border: 2px solid var(--cream); border-radius: 14px; color: var(--cream); font-weight: 800; font-size: 24px; background: var(--ink); }
-.language-toggle { display: flex; align-items: center; gap: 8px; color: var(--sand); font-size: 16px; }
-.language-toggle button { min-width: 48px; min-height: 48px; border: 0; background: transparent; padding: 8px 4px; color: var(--sand); cursor: pointer; }
+.account-wrap { position: relative; }
+.brand-mark { width: 44px; height: 44px; display: grid; place-items: center; border: 2px solid var(--cream); border-radius: 14px; color: var(--cream); font-weight: 800; font-size: 24px; background: var(--ink); cursor: pointer; }
+.language-toggle {
+  display: flex; align-items: center; gap: 2px; color: var(--sand); font-size: 16px;
+  border: 1.5px solid rgba(230, 230, 230, 0.6); border-radius: 999px; padding: 4px;
+  background: rgba(255, 255, 255, 0.06);
+}
+.language-toggle button { min-width: 44px; min-height: 44px; border: 0; background: transparent; padding: 8px 4px; color: var(--sand); cursor: pointer; border-radius: 999px; }
 .language-toggle button[aria-pressed="true"] { color: var(--orange); font-weight: 800; }
+
+.account-backdrop { position: fixed; inset: 0; z-index: 20; background: transparent; }
+.account-panel {
+  position: absolute; top: calc(100% + 10px); left: 0; z-index: 21;
+  width: min(320px, calc(100vw - 44px)); padding: 20px 20px 18px;
+  border: 2px solid var(--cream); border-radius: 22px; background: var(--ink);
+  box-shadow: 6px 6px 0 rgba(0, 0, 0, 0.5); animation: dialog-enter 160ms ease-out both;
+}
+.account-close { position: absolute; top: 10px; right: 10px; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 50%; background: transparent; color: var(--sand); font-size: 17px; cursor: pointer; }
+.account-close:hover { color: var(--cream); }
+.account-greeting { margin: 0 26px 14px 0; font-size: 18px; color: var(--cream); }
+.account-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.account-avatar { width: 56px; height: 56px; flex-shrink: 0; border-radius: 50%; display: grid; place-items: center; background: var(--cream); color: var(--orange); font-family: "Bricolage Grotesque", "Noto Sans Kannada", system-ui, sans-serif; font-weight: 800; font-size: 24px; }
+.account-name-field { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 0; }
+.account-name-field label { font-size: 13px; color: var(--sand); }
+.account-name-field input { min-height: 44px; padding: 0 12px; border-radius: 12px; border: 1.5px solid rgba(241, 230, 207, 0.4); background: var(--charcoal); color: var(--cream); font-size: 16px; }
+.account-name-field input::placeholder { color: var(--sand); opacity: .7; }
+.account-vibration-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-top: 16px; margin-top: 2px; border-top: 1px solid rgba(241, 230, 207, 0.2); color: var(--cream); font-size: 15px; }
+.account-switch { position: relative; width: 48px; height: 28px; flex-shrink: 0; border-radius: 999px; border: 1.5px solid var(--cream); background: var(--charcoal); padding: 0; cursor: pointer; }
+.account-switch[aria-pressed="true"] { background: var(--teal); }
+.account-switch-knob { position: absolute; top: 2px; left: 2px; width: 22px; height: 22px; border-radius: 50%; background: var(--cream); transition: transform 140ms ease; }
+.account-switch[aria-pressed="true"] .account-switch-knob { transform: translateX(20px); }
+@media (max-width: 480px) {
+  .account-backdrop { background: rgba(0, 0, 0, 0.55); }
+  .account-panel { position: fixed; left: 0; right: 0; bottom: 0; top: auto; width: 100%; max-height: 80vh; overflow-y: auto; border-radius: 22px 22px 0 0; animation: sheet-enter 180ms ease-out both; }
+}
 
 .home-intro { padding: clamp(40px, 10vh, 84px) 0 30px; }
 .eyebrow { color: var(--teal); font-size: 11px; font-weight: 800; letter-spacing: .16em; }
@@ -110,6 +141,7 @@ button { color: inherit; }
 
 @keyframes enter { from { opacity: 0; transform: translateY(7px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes dialog-enter { from { opacity: 0; transform: translateY(5px) scale(.99); } to { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes sheet-enter { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes current-flow { to { stroke-dashoffset: -28; } }
 @keyframes flash { 50% { opacity: .35; } }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
