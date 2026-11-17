@@ -1,0 +1,60 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="640" viewBox="0 0 640 640">
+  <rect width="640" height="640" fill="#FBF9F5" rx="16"/>
+  <!-- Paper margin lines -->
+  <rect x="24" y="24" width="592" height="592" fill="none" stroke="#E2E8F0" stroke-width="2" rx="12"/>
+  <text x="320" y="70" text-anchor="middle" font-family="sans-serif" font-weight="bold" font-size="20" fill="#1E293B">Two Bulbs in Series (Hand-drawn)</text>
+
+  <!-- Wires & Components -->
+  <g stroke="#0F172A" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- Top wire left of switch -->
+    <line x1="140" y1="140" x2="220" y2="140"/>
+    <!-- Switch at (220,140) - (300,140) -->
+    <circle cx="220" cy="140" r="5" fill="#0F172A"/>
+    <circle cx="300" cy="140" r="5" fill="#0F172A"/>
+    <line x1="220" y1="140" x2="300" y2="140"/>
+    
+    <!-- Top wire to Bulb 1 -->
+    <line x1="300" y1="140" x2="420" y2="140"/>
+    
+    <!-- Bulb 1 at (450, 140) -->
+    <line x1="420" y1="140" x2="430" y2="140"/>
+    <circle cx="450" cy="140" r="22"/>
+    <line x1="434" y1="124" x2="466" y2="156"/>
+    <line x1="466" y1="124" x2="434" y2="156"/>
+    <line x1="470" y1="140" x2="520" y2="140"/>
+
+    <!-- Right top corner to Bulb 2 -->
+    <line x1="520" y1="140" x2="520" y2="310"/>
+    <!-- Bulb 2 at (520, 330) -->
+    <circle cx="520" cy="330" r="22"/>
+    <line x1="504" y1="314" x2="536" y2="346"/>
+    <line x1="536" y1="314" x2="504" y2="346"/>
+    <line x1="520" y1="352" x2="520" y2="500"/>
+
+    <!-- Bottom wire -->
+    <line x1="520" y1="500" x2="140" y2="500"/>
+
+    <!-- Left wire from bottom to battery -->
+    <line x1="140" y1="500" x2="140" y2="350"/>
+
+    <!-- Battery at (140, 320) -->
+    <!-- Positive long plate -->
+    <line x1="110" y1="290" x2="170" y2="290" stroke-width="4"/>
+    <!-- Negative short thick plate -->
+    <line x1="122" y1="320" x2="158" y2="320" stroke-width="7"/>
+    <!-- Second cell -->
+    <line x1="110" y1="335" x2="170" y2="335" stroke-width="4"/>
+    <line x1="122" y1="350" x2="158" y2="350" stroke-width="7"/>
+
+    <!-- Left wire from top to battery -->
+    <line x1="140" y1="140" x2="140" y2="290"/>
+  </g>
+
+  <!-- Labels -->
+  <text x="260" y="125" font-family="sans-serif" font-size="14" fill="#475569" text-anchor="middle">Switch (closed)</text>
+  <text x="450" y="105" font-family="sans-serif" font-size="14" fill="#475569" text-anchor="middle">Bulb 1</text>
+  <text x="560" y="335" font-family="sans-serif" font-size="14" fill="#475569">Bulb 2</text>
+  <text x="95" y="280" font-family="sans-serif" font-weight="bold" font-size="18" fill="#DC2626">+</text>
+  <text x="95" y="370" font-family="sans-serif" font-weight="bold" font-size="18" fill="#2563EB">−</text>
+  <text x="75" y="325" font-family="sans-serif" font-size="14" fill="#475569">9V</text>
+</svg>
