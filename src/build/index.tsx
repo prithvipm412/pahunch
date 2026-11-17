@@ -2,7 +2,7 @@ import { useMemo, useRef, useState, type CSSProperties, type MouseEvent as React
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { CircuitComponent, ComponentResult, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
-import { stopSonify, sonify } from '../audio'
+import { stopAll, stopSonify } from '../audio'
 import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
 import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
@@ -95,8 +95,7 @@ export default function BuildScreen() {
     if (recalculate && hadResults) {
       const nextResult = solve(next)
       setResult(nextResult)
-      if (nextResult.ok) sonify(nextResult)
-      else stopSonify()
+      stopSonify()
     } else {
       setResult(null)
       stopSonify()
@@ -309,9 +308,15 @@ export default function BuildScreen() {
     saveNetlist({ ...netlist, components: netlist.components.map((component) => component.id === selectedId ? { ...component, ...changes } : component) }, true)
   }
   function runCircuit() {
-    const next = solve(netlist)
-    setResult(next); setSelectedId(null)
-    if (next.ok) { sonify(next); setNotice(translate('resultsUpdated')) } else { stopSonify(); setNotice(translate('checkCircuit')) }
+    stopAll()
+    try {
+      const next = solve(netlist)
+      setResult(next); setSelectedId(null)
+      if (next.ok) setNotice(translate('resultsUpdated'))
+      else setNotice(translate('checkCircuit'))
+    } finally {
+      stopAll()
+    }
   }
   const friendlyErrors = result?.errors.map((error) => error === 'no_battery' || error === 'empty' ? translate('noBattery') : error === 'short_circuit' ? translate('shortCircuit') : error === 'open_circuit' ? translate('openCircuit') : translate('otherError'))
   function clearCircuit() {

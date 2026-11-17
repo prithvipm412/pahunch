@@ -1,8 +1,8 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { CircuitComponent, GridPoint } from '../contracts/netlist'
 import { solve } from '../physics'
-import { playClip, sonify, stopAll, stopSonify, vibrate } from '../audio'
+import { getAudioGeneration, isAudioGenerationCurrent, playSequence, sonify, stopAll, stopSonify, vibrate } from '../audio'
 import { useLanguage } from '../app/lang'
 import { fallbackFor } from './clips'
 import { classifySwipe, isPairedTap, pointFromClient } from './gestures'
@@ -71,12 +71,12 @@ export default function SparshScreen() {
 
   const runEffects = useCallback(
     async (effects: SparshEffect[]) => {
+      let token = getAudioGeneration()
       for (const effect of effects) {
+        if (!isAudioGenerationCurrent(token)) return
         if (effect.type === 'speak') {
           setCaption(effect.clips.map(fallbackFor).join(' · '))
-          for (const clip of effect.clips) {
-            await playClip(lang, clip, fallbackFor(clip))
-          }
+          await playSequence(lang, effect.clips, (clip) => fallbackFor(clip as Parameters<typeof fallbackFor>[0]))
         } else if (effect.type === 'vibrate') {
           vibrate(effect.pattern)
         } else if (effect.type === 'solve') {
@@ -88,6 +88,7 @@ export default function SparshScreen() {
           stopSonify()
         } else if (effect.type === 'stopAll') {
           stopAll()
+          token = getAudioGeneration()
         } else if (effect.type === 'navigateHome') {
           navigate('/')
         }
@@ -137,6 +138,27 @@ export default function SparshScreen() {
       g.pendingTwoFingerTapTimer = null
     }
   }
+
+  const clearGestureTimers = () => {
+    clearHoldTimer()
+    clearTapFinalizeTimer()
+    clearRestTimer()
+    clearPendingTwoFingerTapTimer()
+  }
+
+  useEffect(() => {
+    const stopAndClearOnHide = () => {
+      if (document.visibilityState !== 'hidden') return
+      clearGestureTimers()
+      stopAll()
+    }
+    document.addEventListener('visibilitychange', stopAndClearOnHide)
+    return () => {
+      document.removeEventListener('visibilitychange', stopAndClearOnHide)
+      clearGestureTimers()
+      stopAll()
+    }
+  }, [])
 
   const scheduleRest = (point: GridPoint) => {
     clearRestTimer()

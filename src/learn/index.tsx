@@ -408,16 +408,13 @@ function FaultTab({ lang, s }: FaultTabProps) {
           fixedResult,
           lastTapped: componentId,
         }))
-        await playClip(lang, 'fault_correct', s.fault_correct)
-        await playClip(lang, 'fault_fixed', s.fault_fixed)
+        await playSequence(lang, ['fault_correct', 'fault_fixed'], (name) => name === 'fault_correct' ? s.fault_correct : s.fault_fixed)
         setState((prev) => ({ ...prev, phase: 'fixed' }))
       } else {
         const newWrong = state.wrongTries + 1
         setState((prev) => ({ ...prev, wrongTries: newWrong, lastTapped: componentId }))
-        await playClip(lang, 'fault_wrong', s.fault_wrong)
-        if (newWrong >= 2) {
-          await playClip(lang, 'fault_hint', puzzle.hintText)
-        }
+        const clips = newWrong >= 2 ? ['fault_wrong', 'fault_hint'] : ['fault_wrong']
+        await playSequence(lang, clips, (name) => name === 'fault_wrong' ? s.fault_wrong : puzzle.hintText)
       }
     },
     [state, puzzle, lang, s],
