@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { classifySwipe, isPairedTap, pointFromClient } from './gestures'
+import { classifySwipe, isEdgeStart, isPairedTap, pointFromClient, resolveFingerClass } from './gestures'
 
 describe('classifySwipe', () => {
   it('returns null below the distance threshold', () => {
@@ -42,5 +42,45 @@ describe('isPairedTap', () => {
 
   it('does not pair a tap outside the distance window', () => {
     expect(isPairedTap(1100, 1000, 50, 50, 150, 50, 350, 44)).toBe(false)
+  })
+})
+
+describe('resolveFingerClass', () => {
+  it('uses the maximum finger count seen during the whole gesture', () => {
+    expect(resolveFingerClass([1])).toBe(1)
+    expect(resolveFingerClass([1, 1, 1, 0])).toBe(1)
+  })
+
+  it('a late-joining second finger still resolves the gesture to 2', () => {
+    // finger 1 lands (count 1), a short beat passes, finger 2 joins (count 2), both lift
+    expect(resolveFingerClass([1, 1, 2, 2, 1, 0])).toBe(2)
+  })
+
+  it('a late-joining third finger still resolves the gesture to 3', () => {
+    expect(resolveFingerClass([1, 2, 2, 3, 2, 0])).toBe(3)
+  })
+
+  it('caps at 3 even if more fingers somehow touch down', () => {
+    expect(resolveFingerClass([1, 2, 3, 4, 5])).toBe(3)
+  })
+
+  it('returns 0 for no samples', () => {
+    expect(resolveFingerClass([])).toBe(0)
+  })
+})
+
+describe('isEdgeStart', () => {
+  const screenWidth = 400
+
+  it('flags a start near the left edge', () => {
+    expect(isEdgeStart(10, screenWidth, 24)).toBe(true)
+  })
+
+  it('flags a start near the right edge', () => {
+    expect(isEdgeStart(390, screenWidth, 24)).toBe(true)
+  })
+
+  it('does not flag a start in the middle of the screen', () => {
+    expect(isEdgeStart(200, screenWidth, 24)).toBe(false)
   })
 })

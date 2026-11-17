@@ -29,6 +29,16 @@ export interface LessonState {
   stepIndex: number
 }
 
+// A snapshot taken BEFORE a placement/removal/toggle, so 2-finger-swipe-right can restore it.
+// `undoneClips` is precomputed at push time — the clips describing what reverting *to* this
+// snapshot undoes (e.g. placing a bulb is undone by "removed, bulb"; removing one is undone by
+// "bulb, is back"; toggling a switch is undone by announcing the state it reverts to).
+export interface HistoryEntry {
+  netlist: Netlist
+  cursor: GridPoint
+  undoneClips: ClipName[]
+}
+
 export interface SparshState {
   mode: Mode
   cursor: GridPoint
@@ -42,6 +52,12 @@ export interface SparshState {
   lastResult: SolveResult | null
   nextId: number
   lesson: LessonState | null
+  history: HistoryEntry[]
+  // Timestamp (caller-supplied, via SWIPE_LEFT's `now`) of the most recent un-confirmed
+  // 2-finger-swipe-left, or null. A second swipe-left within EXIT_CONFIRM_WINDOW_MS confirms the
+  // exit; the field is never explicitly "expired" — an old timestamp just naturally fails the
+  // window check on the next swipe-left, so it's treated as a fresh first swipe.
+  pendingExitAt: number | null
 }
 
 export type SparshEvent =
@@ -55,9 +71,11 @@ export type SparshEvent =
   | { type: 'TWO_FINGER_HOLD' }
   | { type: 'TWO_FINGER_SWIPE_DOWN' }
   | { type: 'TWO_FINGER_SWIPE_UP' }
+  | { type: 'TWO_FINGER_SWIPE_RIGHT' } // undo
   | { type: 'TWO_FINGER_DOUBLE_TAP' }
-  | { type: 'TWO_FINGER_SWIPE_LEFT' }
+  | { type: 'TWO_FINGER_SWIPE_LEFT'; now: number } // home, with a 2nd-swipe-within-3s confirmation
   | { type: 'THREE_FINGER_TAP' }
+  | { type: 'BACK_INTERCEPTED' } // browser/hardware Back was caught instead of leaving
   | { type: 'SOLVE_RESULT'; result: SolveResult }
   | { type: 'DRAG'; point: GridPoint }
   | { type: 'REST'; point: GridPoint }
@@ -80,6 +98,10 @@ const EDGE_VIBRATION = [30, 40, 30]
 const MOVE_TICK_VIBRATION = 10
 const TAP_TICK_VIBRATION = 8
 const PULSE_VIBRATION = 25
+const UNDO_VIBRATION = [15, 40, 15]
+
+const MAX_HISTORY = 50
+const EXIT_CONFIRM_WINDOW_MS = 3000
 
 // Each part gets its own vibration pattern the moment it's chosen (not when placed), so a
 // blind student can feel which part they picked without waiting for speech.
@@ -102,6 +124,8 @@ export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
     lastResult: null,
     nextId: 1,
     lesson: null,
+    history: [],
+    pendingExitAt: null,
   }
 }
 
@@ -125,6 +149,20 @@ function isSeriesStepComplete(stepIndex: number, netlist: Netlist): boolean {
 function isParallelStepComplete(netlist: Netlist): boolean {
   const { counts, topology } = describeCircuit(netlist)
   return topology === 'parallel' && counts.bulb >= 2 && counts.battery >= 1
+}
+
+// After an undo restores an earlier netlist, the lesson's phase/stepIndex (which only ever
+// moved forward as the student built) can be ahead of what that netlist actually supports. This
+// re-derives the current step from scratch, within whichever phase family (series or parallel)
+// the lesson is already in — it never jumps back from 'parallel' to 'series', since undo is only
+// ever used for a mistake a step or two back, not to rewind across a whole run checkpoint.
+function recomputeLessonAfterUndo(lesson: LessonState, netlist: Netlist): LessonState {
+  if (lesson.phase === 'parallel' || lesson.phase === 'parallelRun') {
+    return isParallelStepComplete(netlist) ? { phase: 'parallelRun', stepIndex: 0 } : { phase: 'parallel', stepIndex: 0 }
+  }
+  let stepIndex = 0
+  while (stepIndex < SERIES_STEP_CLIPS.length && isSeriesStepComplete(stepIndex, netlist)) stepIndex++
+  return stepIndex >= SERIES_STEP_CLIPS.length ? { phase: 'seriesRun', stepIndex: 0 } : { phase: 'series', stepIndex }
 }
 
 // Re-checks the active lesson step against the (possibly just-edited) netlist and advances as
@@ -208,6 +246,15 @@ function segmentOccupied(netlist: Netlist, a: GridPoint, b: GridPoint): boolean 
   return netlist.components.some(
     (c) => (pointsEqual(c.from, a) && pointsEqual(c.to, b)) || (pointsEqual(c.from, b) && pointsEqual(c.to, a)),
   )
+}
+
+// Snapshots `state` (before a placement/removal/toggle) onto the history stack, capped at
+// MAX_HISTORY. Moving the cursor, and choosing/cancelling a part, never call this — only an
+// actual netlist change does.
+function pushHistory(state: SparshState, undoneClips: ClipName[]): HistoryEntry[] {
+  const entry: HistoryEntry = { netlist: state.netlist, cursor: state.cursor, undoneClips }
+  const next = [...state.history, entry]
+  return next.length > MAX_HISTORY ? next.slice(next.length - MAX_HISTORY) : next
 }
 
 function stateClipFor(state: SolveResult['components'][number]['state']): ClipName {
@@ -310,6 +357,7 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
       cursor: neighbor,
       netlist: { ...netlist, components: [...netlist.components, component] },
       buildSub: nextBuildSub,
+      history: pushHistory(state, [partClipFor(partType), 'removed_suffix']),
     },
     effects: [{ type: 'speak', clips: ['placed', partClipFor(partType)] }],
   })
@@ -392,6 +440,7 @@ function handleRemoveAtCursor(state: SparshState): SparshTransition {
     state: {
       ...state,
       netlist: { ...state.netlist, components: state.netlist.components.filter((c) => c.id !== component.id) },
+      history: pushHistory(state, [partClipFor(component.type), 'is_back']),
     },
     effects: [{ type: 'speak', clips: ['removed', partClipFor(component.type)] }],
   })
@@ -410,9 +459,58 @@ function handleToggleSwitchAtCursor(state: SparshState): SparshTransition {
         ...state.netlist,
         components: state.netlist.components.map((c) => (c.id === component.id ? { ...c, closed: nextClosed } : c)),
       },
+      history: pushHistory(state, [switchClipFor(component.closed === true)]),
     },
     effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }],
   })
+}
+
+// Shared by TWO_FINGER_TAP (exiting Explore) and UNDO-from-Explore ("undo first stops the run,
+// then undoes"): stops the tone and, if the lesson is waiting on the parallel rebuild, repeats
+// that instruction now that the student is back in Build mode.
+function exitExplore(state: SparshState): SparshTransition {
+  const effects: SparshEffect[] = [{ type: 'sonifyStop' }]
+  if (state.lesson?.phase === 'parallel') {
+    effects.push({ type: 'speak', clips: PARALLEL_STEP_CLIPS[0] })
+  }
+  return { state: { ...state, mode: 'build', explore: null }, effects }
+}
+
+function popHistory(state: SparshState): SparshTransition {
+  if (state.history.length === 0) {
+    return { state, effects: [{ type: 'speak', clips: ['nothing_to_undo'] }] }
+  }
+  const entry = state.history[state.history.length - 1]
+  const restoredLesson = state.lesson ? recomputeLessonAfterUndo(state.lesson, entry.netlist) : null
+  return {
+    state: {
+      ...state,
+      netlist: entry.netlist,
+      cursor: entry.cursor,
+      history: state.history.slice(0, -1),
+      lesson: restoredLesson,
+    },
+    effects: [
+      { type: 'speak', clips: ['undone', ...entry.undoneClips, posClipFor(entry.cursor.row, entry.cursor.col)] },
+      { type: 'vibrate', pattern: UNDO_VIBRATION },
+    ],
+  }
+}
+
+function handleUndo(state: SparshState): SparshTransition {
+  // A chosen-but-not-yet-placed part isn't a history entry — undo just cancels it.
+  if (state.buildSub.kind === 'partChosen') {
+    return {
+      state: { ...state, buildSub: { kind: 'idle' }, pendingTapCount: 0 },
+      effects: [{ type: 'speak', clips: ['cancelled'] }],
+    }
+  }
+  if (state.mode === 'explore') {
+    const exited = exitExplore(state)
+    const popped = popHistory(exited.state)
+    return { state: popped.state, effects: [...exited.effects, ...popped.effects] }
+  }
+  return popHistory(state)
 }
 
 export function sparshReducer(state: SparshState, event: SparshEvent): SparshTransition {
@@ -455,11 +553,7 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
 
     case 'TWO_FINGER_TAP': {
       if (state.mode === 'build') return { state, effects: [{ type: 'solve' }] }
-      const effects: SparshEffect[] = [{ type: 'sonifyStop' }]
-      if (state.lesson?.phase === 'parallel') {
-        effects.push({ type: 'speak', clips: PARALLEL_STEP_CLIPS[0] })
-      }
-      return { state: { ...state, mode: 'build', explore: null }, effects }
+      return exitExplore(state)
     }
 
     case 'TWO_FINGER_HOLD':
@@ -474,6 +568,20 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       if (state.mode !== 'build') return noChange(state)
       return handleToggleSwitchAtCursor(state)
 
+    case 'TWO_FINGER_SWIPE_RIGHT':
+      return handleUndo(state)
+
+    case 'TWO_FINGER_SWIPE_LEFT': {
+      const now = event.now
+      if (state.pendingExitAt !== null && now - state.pendingExitAt <= EXIT_CONFIRM_WINDOW_MS) {
+        return { state: { ...state, pendingExitAt: null }, effects: [{ type: 'stopAll' }, { type: 'navigateHome' }] }
+      }
+      return { state: { ...state, pendingExitAt: now }, effects: [{ type: 'speak', clips: ['exit_confirm'] }] }
+    }
+
+    case 'BACK_INTERCEPTED':
+      return { state, effects: [{ type: 'speak', clips: ['exit_blocked_back'] }] }
+
     case 'TWO_FINGER_DOUBLE_TAP': {
       const wasExploring = state.mode === 'explore'
       return {
@@ -486,6 +594,7 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
           cursor: { row: 0, col: 0 },
           netlist: { ...state.netlist, components: [] },
           lesson: { phase: 'series', stepIndex: 0 },
+          history: [],
         },
         effects: [
           ...(wasExploring ? ([{ type: 'sonifyStop' }] as SparshEffect[]) : []),
