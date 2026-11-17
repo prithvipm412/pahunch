@@ -1,75 +1,75 @@
 file,en,kn
-pos_template,"Row {r}, column {c}.",
-welcome,Welcome to KaagazLab. Double-tap anywhere to start.,
-talkback_hint,"For best results, pause TalkBack by holding both volume keys.",
-grid_intro,You are on a five by five grid. Swipe to move. Double-tap to place a part.,
-row,Row,
-column,Column,
-n1,One,
-n2,Two,
-n3,Three,
-n4,Four,
-n5,Five,
-empty,Empty,
-edge,Edge of the grid.,
-summary_hint,Press and hold anywhere to hear your whole circuit.,
-menu_open,Choose a part. Swipe to hear each one. Double-tap to choose.,
-battery,Battery,
-bulb,Bulb,
-resistor,Resistor,
-switch,Switch,
-wire,Wire,
-wire_direction,Swipe in the direction the wire should go.,
-placed,Placed.,
-removed,Removed.,
-undo,Undone.,
-switch_open,The switch is open.,
-switch_closed,The switch is closed.,
-your_circuit_has,Your circuit has,
-in_series,"connected in one loop, in series.",
-in_parallel,"connected on separate branches, in parallel.",
-not_connected,Some parts are not connected yet.,
-run,Running your circuit. Listen.,
-run_hint,Double-tap with two fingers to run the circuit.,
-trace_hint,Slide one finger slowly. It vibrates on the wires.,
-state_off,off,
-state_dim,glowing dimly,
-state_normal,glowing,
-state_bright,glowing brightly,
-state_overload,too much current!,
-short_circuit,Short circuit! The battery is connected straight across. Add a bulb or a resistor.,
-open_circuit,"The loop is not complete, so current cannot flow.",
-nothing_to_run,Add a battery and a bulb first.,
-predict_question,Before we run it: what will the bulbs do?,
-predict_controls,Tap the top half to hear the next answer. Double-tap to choose.,
-opt_both_bright,Both bulbs bright.,
-opt_both_dim,Both bulbs dim.,
-opt_one_each,"One bright, one dim.",
-opt_both_off,Both bulbs off.,
-correct,Correct! Well done.,
-not_quite,Not quite. Let's see why.,
-explain_series,"In series, the bulbs share the battery's push, so each bulb gets less and glows dimmer.",
-explain_parallel,"In parallel, each bulb gets the full push of the battery, so both glow brightly.",
-explain_open,"Current needs a complete loop. If there is a gap, nothing lights up.",
-explain_switch,"An open switch makes a gap in the loop, so the bulb turns off.",
-explain_short,A wire straight across the battery lets current rush through without lighting anything. This is dangerous in real life.,
-explain_resistor,"A resistor slows the current down, so the bulb glows dimmer.",
-try_parallel,Now try building it in parallel.,
-try_series,Now try putting the bulbs in one loop.,
-try_switch,Now try opening the switch.,
-fault_intro,Fault Hunt! Something is wrong with this circuit. Find it and fix it.,
-fault_1,One bulb is silent. Find out why.,
-fault_2,Nothing lights up. Find the problem.,
-fault_3,The battery is in danger. Find the mistake.,
-fault_hint,Trace the wires slowly with your finger. The vibration stops where there is a gap.,
-fault_fixed,You found it! The circuit works now.,
-fault_try_again,Not yet. Keep looking.,
-reading,Reading your circuit. Please wait.,
-check_drawing,Please check the circuit. Tap any part I got wrong.,
-too_blurry,The photo is blurry. Hold steady and try again.,
-saved_offline,No network. Your scan is saved and will be sent later.,
-yes,Yes,
-no,No,
-back,Going back.,
-home,Home screen.,
-language_switched,Language changed to English.,
+pos_template,”Row {r}, column {c}.”,”ಸಾಲು {r}, ಕಾಲಂ {c}.”
+welcome,Welcome to KaagazLab. Double-tap anywhere to start.,ಕಾಗಜ್‌ಲ್ಯಾಬ್‌ಗೆ ಸ್ವಾಗತ. ಶುರು ಮಾಡಲು ಎಲ್ಲಿಯಾದರೂ ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+talkback_hint,”For best results, pause TalkBack by holding both volume keys.”,ಚೆನ್ನಾಗಿ ಕೆಲಸ ಮಾಡಲು ಎರಡೂ ವಾಲ್ಯೂಮ್ ಬಟನ್ ಒತ್ತಿ ಹಿಡಿದು TalkBack ಅನ್ನು ಸ್ವಲ್ಪ ಹೊತ್ತು ನಿಲ್ಲಿಸಿ.
+grid_intro,You are on a five by five grid. Swipe to move. Double-tap to place a part.,ನೀವು ಐದು ಸಾಲು ಮತ್ತು ಐದು ಕಾಲಂ ಇರುವ ಚೌಕದಲ್ಲಿ ಇದ್ದೀರಿ. ಚಲಿಸಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಭಾಗವನ್ನು ಇಡಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+row,Row,ಸಾಲು
+column,Column,ಕಾಲಂ
+n1,One,ಒಂದು
+n2,Two,ಎರಡು
+n3,Three,ಮೂರು
+n4,Four,ನಾಲ್ಕು
+n5,Five,ಐದು
+empty,Empty,ಖಾಲಿ
+edge,Edge of the grid.,ಇದು ಚೌಕದ ಅಂಚು.
+summary_hint,Press and hold anywhere to hear your whole circuit.,ನಿಮ್ಮ ಪೂರ್ತಿ ಮಂಡಲವನ್ನು ಕೇಳಲು ಎಲ್ಲಿಯಾದರೂ ಒತ್ತಿ ಹಿಡಿಯಿರಿ.
+menu_open,Choose a part. Swipe to hear each one. Double-tap to choose.,ಒಂದು ಭಾಗವನ್ನು ಆರಿಸಿ. ಒಂದೊಂದನ್ನೂ ಕೇಳಲು ಸ್ವೈಪ್ ಮಾಡಿ. ಆರಿಸಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+battery,Battery,ಬ್ಯಾಟರಿ
+bulb,Bulb,ಬಲ್ಬ್
+resistor,Resistor,ರೋಧಕ
+switch,Switch,ಸ್ವಿಚ್
+wire,Wire,ತಂತಿ
+wire_direction,Swipe in the direction the wire should go.,ತಂತಿ ಹೋಗಬೇಕಾದ ದಿಕ್ಕಿಗೆ ಸ್ವೈಪ್ ಮಾಡಿ.
+placed,Placed.,ಇಡಲಾಯಿತು.
+removed,Removed.,ತೆಗೆಯಲಾಯಿತು.
+undo,Undone.,ರದ್ದು ಮಾಡಲಾಯಿತು.
+switch_open,The switch is open.,ಸ್ವಿಚ್ ತೆರೆದಿದೆ.
+switch_closed,The switch is closed.,ಸ್ವಿಚ್ ಮುಚ್ಚಿದೆ.
+your_circuit_has,Your circuit has,ನಿಮ್ಮ ಮಂಡಲದಲ್ಲಿ
+in_series,”connected in one loop, in series.”,”ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ, ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಲಾಗಿದೆ.”
+in_parallel,”connected on separate branches, in parallel.”,”ಬೇರೆ ಬೇರೆ ಕವಲುಗಳಲ್ಲಿ, ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಲಾಗಿದೆ.”
+not_connected,Some parts are not connected yet.,ಕೆಲವು ಭಾಗಗಳು ಇನ್ನೂ ಜೋಡಣೆ ಆಗಿಲ್ಲ.
+run,Running your circuit. Listen.,ನಿಮ್ಮ ಮಂಡಲ ಚಾಲೂ ಆಗುತ್ತಿದೆ. ಕೇಳಿ.
+run_hint,Double-tap with two fingers to run the circuit.,ಮಂಡಲವನ್ನು ಚಾಲೂ ಮಾಡಲು ಎರಡು ಬೆರಳುಗಳಿಂದ ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+trace_hint,Slide one finger slowly. It vibrates on the wires.,ಒಂದು ಬೆರಳನ್ನು ನಿಧಾನವಾಗಿ ಸರಿಸಿ. ತಂತಿಯ ಮೇಲೆ ಫೋನ್ ಕಂಪಿಸುತ್ತದೆ.
+state_off,off,ಆರಿದೆ
+state_dim,glowing dimly,ಮಂದವಾಗಿ ಉರಿಯುತ್ತಿದೆ
+state_normal,glowing,ಉರಿಯುತ್ತಿದೆ
+state_bright,glowing brightly,ಜೋರಾಗಿ ಉರಿಯುತ್ತಿದೆ
+state_overload,too much current!,ತುಂಬಾ ಹೆಚ್ಚು ವಿದ್ಯುತ್!
+short_circuit,Short circuit! The battery is connected straight across. Add a bulb or a resistor.,ಶಾರ್ಟ್ ಸರ್ಕ್ಯೂಟ್! ಬ್ಯಾಟರಿಗೆ ನೇರವಾಗಿ ತಂತಿ ಜೋಡಿಸಲಾಗಿದೆ. ಒಂದು ಬಲ್ಬ್ ಅಥವಾ ರೋಧಕ ಸೇರಿಸಿ.
+open_circuit,”The loop is not complete, so current cannot flow.”,”ಸುತ್ತು ಪೂರ್ತಿಯಾಗಿಲ್ಲ, ಆದ್ದರಿಂದ ವಿದ್ಯುತ್ ಹರಿಯಲು ಆಗುವುದಿಲ್ಲ.”
+nothing_to_run,Add a battery and a bulb first.,ಮೊದಲು ಒಂದು ಬ್ಯಾಟರಿ ಮತ್ತು ಒಂದು ಬಲ್ಬ್ ಸೇರಿಸಿ.
+predict_question,Before we run it: what will the bulbs do?,ಚಾಲೂ ಮಾಡುವ ಮೊದಲು ಹೇಳಿ: ಬಲ್ಬ್‌ಗಳು ಏನಾಗುತ್ತವೆ?
+predict_controls,Tap the top half to hear the next answer. Double-tap to choose.,ಮುಂದಿನ ಉತ್ತರ ಕೇಳಲು ಪರದೆಯ ಮೇಲಿನ ಅರ್ಧದಲ್ಲಿ ತಟ್ಟಿ. ಆರಿಸಲು ಎರಡು ಬಾರಿ ತಟ್ಟಿ.
+opt_both_bright,Both bulbs bright.,ಎರಡೂ ಬಲ್ಬ್ ಜೋರಾಗಿ ಉರಿಯುತ್ತವೆ.
+opt_both_dim,Both bulbs dim.,ಎರಡೂ ಬಲ್ಬ್ ಮಂದವಾಗಿ ಉರಿಯುತ್ತವೆ.
+opt_one_each,”One bright, one dim.”,”ಒಂದು ಜೋರಾಗಿ, ಇನ್ನೊಂದು ಮಂದವಾಗಿ.”
+opt_both_off,Both bulbs off.,ಎರಡೂ ಬಲ್ಬ್ ಆರಿರುತ್ತವೆ.
+correct,Correct! Well done.,ಸರಿ ಉತ್ತರ! ಶಹಬ್ಬಾಸ್.
+not_quite,Not quite. Let’s see why.,ಸ್ವಲ್ಪ ತಪ್ಪಾಯಿತು. ಯಾಕೆ ಅಂತ ನೋಡೋಣ.
+explain_series,”In series, the bulbs share the battery’s push, so each bulb gets less and glows dimmer.”,”ಸರಣಿ ಕ್ರಮದಲ್ಲಿ ಬಲ್ಬ್‌ಗಳು ಬ್ಯಾಟರಿಯ ತಳ್ಳುವ ಶಕ್ತಿಯನ್ನು ಹಂಚಿಕೊಳ್ಳುತ್ತವೆ, ಆದ್ದರಿಂದ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೆ ಕಡಿಮೆ ಸಿಗುತ್ತದೆ ಮತ್ತು ಮಂದವಾಗಿ ಉರಿಯುತ್ತದೆ.”
+explain_parallel,”In parallel, each bulb gets the full push of the battery, so both glow brightly.”,”ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಪ್ರತಿ ಬಲ್ಬ್‌ಗೆ ಬ್ಯಾಟರಿಯ ಪೂರ್ತಿ ತಳ್ಳುವ ಶಕ್ತಿ ಸಿಗುತ್ತದೆ, ಆದ್ದರಿಂದ ಎರಡೂ ಜೋರಾಗಿ ಉರಿಯುತ್ತವೆ.”
+explain_open,”Current needs a complete loop. If there is a gap, nothing lights up.”,ವಿದ್ಯುತ್ ಹರಿಯಲು ಪೂರ್ತಿ ಸುತ್ತು ಬೇಕು. ಎಲ್ಲಾದರೂ ತುಂಡಾಗಿದ್ದರೆ ಏನೂ ಉರಿಯುವುದಿಲ್ಲ.
+explain_switch,”An open switch makes a gap in the loop, so the bulb turns off.”,”ತೆರೆದ ಸ್ವಿಚ್ ಸುತ್ತನ್ನು ತುಂಡು ಮಾಡುತ್ತದೆ, ಆದ್ದರಿಂದ ಬಲ್ಬ್ ಆರುತ್ತದೆ.”
+explain_short,A wire straight across the battery lets current rush through without lighting anything. This is dangerous in real life.,ಬ್ಯಾಟರಿಗೆ ನೇರವಾಗಿ ಜೋಡಿಸಿದ ತಂತಿಯಲ್ಲಿ ವಿದ್ಯುತ್ ಏನನ್ನೂ ಉರಿಸದೆ ವೇಗವಾಗಿ ಹರಿಯುತ್ತದೆ. ನಿಜ ಜೀವನದಲ್ಲಿ ಇದು ಅಪಾಯಕಾರಿ.
+explain_resistor,”A resistor slows the current down, so the bulb glows dimmer.”,”ರೋಧಕ ವಿದ್ಯುತ್ತನ್ನು ನಿಧಾನ ಮಾಡುತ್ತದೆ, ಆದ್ದರಿಂದ ಬಲ್ಬ್ ಮಂದವಾಗಿ ಉರಿಯುತ್ತದೆ.”
+try_parallel,Now try building it in parallel.,ಈಗ ಇದನ್ನು ಸಮಾಂತರ ಕ್ರಮದಲ್ಲಿ ಜೋಡಿಸಿ ನೋಡಿ.
+try_series,Now try putting the bulbs in one loop.,ಈಗ ಬಲ್ಬ್‌ಗಳನ್ನು ಒಂದೇ ಸುತ್ತಿನಲ್ಲಿ ಜೋಡಿಸಿ ನೋಡಿ.
+try_switch,Now try opening the switch.,ಈಗ ಸ್ವಿಚ್ ತೆರೆದು ನೋಡಿ.
+fault_intro,Fault Hunt! Something is wrong with this circuit. Find it and fix it.,ದೋಷ ಹುಡುಕಾಟ! ಈ ಮಂಡಲದಲ್ಲಿ ಏನೋ ತಪ್ಪಿದೆ. ಅದನ್ನು ಹುಡುಕಿ ಸರಿಪಡಿಸಿ.
+fault_1,One bulb is silent. Find out why.,ಒಂದು ಬಲ್ಬ್ ಉರಿಯುತ್ತಿಲ್ಲ. ಯಾಕೆ ಎಂದು ಕಂಡುಹಿಡಿಯಿರಿ.
+fault_2,Nothing lights up. Find the problem.,ಏನೂ ಉರಿಯುತ್ತಿಲ್ಲ. ತೊಂದರೆಯನ್ನು ಹುಡುಕಿ.
+fault_3,The battery is in danger. Find the mistake.,ಬ್ಯಾಟರಿಗೆ ಅಪಾಯ ಇದೆ. ತಪ್ಪನ್ನು ಹುಡುಕಿ.
+fault_hint,Trace the wires slowly with your finger. The vibration stops where there is a gap.,ಬೆರಳಿನಿಂದ ತಂತಿಗಳ ಮೇಲೆ ನಿಧಾನವಾಗಿ ಸರಿಸಿ. ತಂತಿ ತುಂಡಾದ ಕಡೆ ಕಂಪನ ನಿಲ್ಲುತ್ತದೆ.
+fault_fixed,You found it! The circuit works now.,ನೀವು ಕಂಡುಹಿಡಿದಿರಿ! ಈಗ ಮಂಡಲ ಕೆಲಸ ಮಾಡುತ್ತಿದೆ.
+fault_try_again,Not yet. Keep looking.,ಇನ್ನೂ ಆಗಿಲ್ಲ. ಹುಡುಕುತ್ತಾ ಇರಿ.
+reading,Reading your circuit. Please wait.,ನಿಮ್ಮ ಮಂಡಲವನ್ನು ಓದುತ್ತಿದ್ದೇನೆ. ಸ್ವಲ್ಪ ಕಾಯಿರಿ.
+check_drawing,Please check the circuit. Tap any part I got wrong.,ದಯವಿಟ್ಟು ಮಂಡಲವನ್ನು ಪರಿಶೀಲಿಸಿ. ನಾನು ತಪ್ಪಾಗಿ ಗುರುತಿಸಿದ ಭಾಗವನ್ನು ತಟ್ಟಿ.
+too_blurry,The photo is blurry. Hold steady and try again.,ಫೋಟೋ ಸ್ಪಷ್ಟವಾಗಿಲ್ಲ. ಫೋನ್ ಅಲುಗಾಡದಂತೆ ಹಿಡಿದು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.
+saved_offline,No network. Your scan is saved and will be sent later.,ನೆಟ್‌ವರ್ಕ್ ಇಲ್ಲ. ನಿಮ್ಮ ಸ್ಕ್ಯಾನ್ ಉಳಿಸಲಾಗಿದೆ. ಅದನ್ನು ನಂತರ ಕಳುಹಿಸಲಾಗುವುದು.
+yes,Yes,ಹೌದು
+no,No,ಇಲ್ಲ
+back,Going back.,ಹಿಂದಕ್ಕೆ ಹೋಗುತ್ತಿದೆ.
+home,Home screen.,ಮುಖ್ಯ ಪರದೆ.
+language_switched,Language changed to English.,ಭಾಷೆಯನ್ನು ಕನ್ನಡಕ್ಕೆ ಬದಲಾಯಿಸಲಾಗಿದೆ.
