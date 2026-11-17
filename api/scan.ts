@@ -2,10 +2,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { GoogleGenAI, Type } from '@google/genai'
 import type { Netlist } from '../src/contracts/netlist.ts'
 
+export interface ScanApiResponse extends Netlist {
+  confidence?: number
+}
+
 // Demo netlist returned when no API key is set (2 bulbs in series with a battery)
-const DEMO_NETLIST: Netlist = {
+const DEMO_NETLIST: ScanApiResponse = {
   gridSize: 5,
   source: 'draw',
+  confidence: 1.0,
   components: [
     { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 9 },
     { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
@@ -14,12 +19,16 @@ const DEMO_NETLIST: Netlist = {
   ],
 }
 
-// Response schema matching the Netlist type for structured JSON output
+// Response schema matching the Netlist type with confidence for structured JSON output
 const NETLIST_SCHEMA = {
   type: Type.OBJECT,
   properties: {
     gridSize: { type: Type.NUMBER },
     source: { type: Type.STRING },
+    confidence: {
+      type: Type.NUMBER,
+      description: 'Confidence score from 0.0 to 1.0 on how clearly and unambiguously the circuit was read',
+    },
     components: {
       type: Type.ARRAY,
       items: {
@@ -53,30 +62,47 @@ const NETLIST_SCHEMA = {
       },
     },
   },
-  required: ['gridSize', 'source', 'components'],
+  required: ['gridSize', 'source', 'confidence', 'components'],
 }
 
 function buildPrompt(hint?: string): string {
-  const base = `You are a circuit-reading assistant for a school app.
+  const base = `You are an expert circuit-reading assistant for a school DC electricity learning app.
 
-Read the hand-drawn DC circuit in this image using standard symbols:
-- Battery: two parallel lines (long positive, short negative) or a cell symbol
-- Bulb / lamp: circle with a cross or filament inside
-- Resistor: rectangle or zigzag line
-- Switch: a gap or lever in the wire
-- Wire: straight connecting lines
+Read the hand-drawn DC circuit in this image using standard circuit schematic symbols:
 
-Your job:
-1. Identify every component in the drawing.
-2. Map each component onto a 5×5 grid (rows 0–4, cols 0–4) preserving the topology — which parts connect to which.
-3. Two components connect ONLY if they share a grid point (same row AND col).
-4. Assign a unique string id to each component (e.g. "bat1", "bulb1", "res1", "sw1", "wire1").
-5. Set gridSize to 5 and source to "draw".
-6. Never invent components that are not clearly visible in the image.
-7. If a component has a readable value (e.g. "10Ω", "9V"), set the value field (numeric only).
-8. For a switch, set closed: true if drawn closed (connected), false if open (gap).
+### FEW-SHOT SYMBOL DESCRIPTIONS:
+1. Battery (DC voltage source):
+   - Drawn as two or more parallel lines perpendicular to the wire: a long thin positive line and a shorter thicker negative line, or stacked cell pairs with + / - markings.
+   - Example component: { "id": "bat1", "type": "battery", "from": {"row": 0, "col": 0}, "to": {"row": 0, "col": 1}, "value": 9 }
 
-Return ONLY valid JSON matching the Netlist schema. No explanation.`
+2. Bulb / Lamp (resistive load that glows):
+   - Drawn as a circle with an 'X' inside, or a circle with a filament loop inside.
+   - Example component: { "id": "bulb1", "type": "bulb", "from": {"row": 0, "col": 1}, "to": {"row": 0, "col": 2} }
+
+3. Resistor (current limiter):
+   - Drawn as a zigzag line (sharp peaks and valleys) or a clean rectangle along the wire.
+   - Example component: { "id": "res1", "type": "resistor", "from": {"row": 1, "col": 2}, "to": {"row": 1, "col": 3}, "value": 10 }
+
+4. Switch (circuit breaker / controller):
+   - Drawn as a gap in the wire with an angled lever/blade (open switch: closed = false), or a straight lever bridging two terminal dots (closed switch: closed = true).
+   - Example component: { "id": "sw1", "type": "switch", "from": {"row": 0, "col": 2}, "to": {"row": 0, "col": 3}, "closed": true }
+
+5. Wire (conductive path):
+   - Drawn as plain straight lines connecting components or turning 90-degree corners.
+   - Example component: { "id": "wire1", "type": "wire", "from": {"row": 0, "col": 3}, "to": {"row": 1, "col": 3} }
+
+### CRITICAL JUNCTION & TOPOLOGY RULES:
+- 5×5 Grid: Map all components onto a 5×5 grid (rows 0–4, cols 0–4). Preserving which parts connect to which.
+- Junctions: Two components connect ONLY if they share the exact same grid point { row, col }.
+- Crossing lines without a dot do NOT connect: If two lines cross without a clear junction dot, they bridge over each other and do NOT share a grid point.
+- Closed loop: If a closed loop is drawn, ALWAYS return an unbroken closed loop of components and wires so the circuit path is electrically complete. Never leave accidental gaps or open ends if the drawing was intended as a closed circuit.
+- Do NOT invent components: Only include parts visibly present in the drawing.
+- Confidence score (0.0 to 1.0):
+  - 0.85 - 1.0: Crystal clear drawing, unambiguous symbols, fully closed loop.
+  - 0.60 - 0.84: Readable drawing with minor handwriting noise, slight tilt, or lightly drawn lines.
+  - Below 0.60: Faint, blurry, ambiguous symbols, incomplete paths, or uncertain component types.
+
+Set gridSize to 5, source to "draw", and return valid JSON matching the schema.`
 
   if (hint) {
     return `${base}
@@ -130,12 +156,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
 
     const text = result.text ?? ''
-    const netlist = JSON.parse(text) as Netlist
+    const data = JSON.parse(text) as ScanApiResponse
     // Always stamp source as 'draw' — never trust model to do it correctly
-    netlist.source = 'draw'
-    if (!netlist.gridSize) netlist.gridSize = 5
+    data.source = 'draw'
+    if (!data.gridSize) data.gridSize = 5
+    if (typeof data.confidence === 'number') {
+      data.confidence = Math.max(0, Math.min(1, data.confidence))
+    } else {
+      data.confidence = 0.9
+    }
 
-    return res.status(200).json(netlist)
+    return res.status(200).json(data)
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     // Never surface the API key in error messages
