@@ -7,23 +7,30 @@ import { haptic, hapticForCircuitStatus } from '../audio/haptics'
 import { playCircuitStatusSound } from '../audio/feedbackSounds'
 import { useLanguage } from '../app/lang'
 import { fallbackFor } from './clips'
-import { classifySwipe, isEdgeStart, isPairedTap, pointFromClient, resolveFingerClass } from './gestures'
+import {
+  classifySwipe,
+  DOUBLE_TAP_MAX_DIST,
+  isEdgeStart,
+  isPairedTap,
+  ONE_FINGER_DOUBLE_TAP_WINDOW_MS,
+  pointFromClient,
+  resolveFingerClass,
+  TWO_FINGER_DOUBLE_TAP_WINDOW_MS,
+} from './gestures'
 import { GESTURE_MAP } from './gestureMap'
 import { createInitialState, sparshReducer, type SparshEffect, type SparshEvent, type SparshState } from './machine'
 import './sparsh.css'
 
 // A single movement threshold for every swipe, 1-, 2-, or 3-finger alike.
 const MOVEMENT_THRESHOLD = 40
-// Shared by the 1-finger and 2-finger double-tap detectors: a second tap this close in time and
-// space to the first pairs with it into a DOUBLE_TAP/TWO_FINGER_DOUBLE_TAP; otherwise the first
-// tap resolves on its own as a SINGLE_TAP/TWO_FINGER_TAP once this window closes.
-const DOUBLE_TAP_WINDOW_MS = 350
-const DOUBLE_TAP_MAX_DIST = 44
 const HOLD_MS = 600
 const REST_MS = 500
 const TAP_MAX_DURATION_MS = 500
 // Android's system back-gesture zone, left and right edge of the screen.
 const EDGE_ZONE_PX = 24
+// How long the part picker stays open with no further double-tap/swipe/long-press before it
+// closes itself (SparshScreen's buildSub-watching effect below dispatches PICKER_IDLE_TIMEOUT).
+const PICKER_IDLE_MS = 10_000
 
 interface GestureTracker {
   active: boolean // from the first finger touching down until the last one lifts
@@ -210,6 +217,17 @@ export default function SparshScreen() {
     }
   }, [])
 
+  // Keeps the part picker open until a swipe places a part, a long-press cancels it, or (this
+  // effect) 10s pass with no further double-tap/swipe/long-press. Re-runs — restarting the
+  // clock — every time `state.buildSub` changes, which covers both opening the picker and
+  // advancing it to the next part (DOUBLE_TAP always returns a new buildSub object), and its
+  // cleanup clears the pending timeout the moment the picker closes any other way.
+  useEffect(() => {
+    if (state.buildSub.kind !== 'partChosen') return
+    const timer = window.setTimeout(() => dispatch({ type: 'PICKER_IDLE_TIMEOUT' }), PICKER_IDLE_MS)
+    return () => window.clearTimeout(timer)
+  }, [state.buildSub, dispatch])
+
   const scheduleRest = (point: GridPoint) => {
     clearRestTimer()
     gestureRef.current.restTimer = window.setTimeout(() => dispatch({ type: 'REST', point }), REST_MS)
@@ -383,7 +401,7 @@ export default function SparshScreen() {
           g.lastTwoFingerTapY,
           g.startX,
           g.startY,
-          DOUBLE_TAP_WINDOW_MS,
+          TWO_FINGER_DOUBLE_TAP_WINDOW_MS,
           DOUBLE_TAP_MAX_DIST,
         )
       ) {
@@ -399,7 +417,7 @@ export default function SparshScreen() {
         g.pendingTwoFingerTapTimer = window.setTimeout(() => {
           g.pendingTwoFingerTapTimer = null
           dispatch({ type: 'TWO_FINGER_TAP' })
-        }, DOUBLE_TAP_WINDOW_MS)
+        }, TWO_FINGER_DOUBLE_TAP_WINDOW_MS)
       }
       return
     }
@@ -421,7 +439,7 @@ export default function SparshScreen() {
         g.lastOneFingerTapY,
         g.startX,
         g.startY,
-        DOUBLE_TAP_WINDOW_MS,
+        ONE_FINGER_DOUBLE_TAP_WINDOW_MS,
         DOUBLE_TAP_MAX_DIST,
       )
     ) {
@@ -437,7 +455,7 @@ export default function SparshScreen() {
       g.pendingOneFingerTapTimer = window.setTimeout(() => {
         g.pendingOneFingerTapTimer = null
         dispatch({ type: 'SINGLE_TAP' })
-      }, DOUBLE_TAP_WINDOW_MS)
+      }, ONE_FINGER_DOUBLE_TAP_WINDOW_MS)
     }
   }
 

@@ -1,5 +1,14 @@
 import { describe, expect, it } from 'vitest'
-import { classifySwipe, isEdgeStart, isPairedTap, pointFromClient, resolveFingerClass } from './gestures'
+import {
+  classifySwipe,
+  DOUBLE_TAP_MAX_DIST,
+  isEdgeStart,
+  isPairedTap,
+  ONE_FINGER_DOUBLE_TAP_WINDOW_MS,
+  pointFromClient,
+  resolveFingerClass,
+  TWO_FINGER_DOUBLE_TAP_WINDOW_MS,
+} from './gestures'
 
 describe('classifySwipe', () => {
   it('returns null below the distance threshold', () => {
@@ -42,6 +51,26 @@ describe('isPairedTap', () => {
 
   it('does not pair a tap outside the distance window', () => {
     expect(isPairedTap(1100, 1000, 50, 50, 150, 50, 350, 44)).toBe(false)
+  })
+})
+
+// Regression for the real-phone bug where every one-finger double-tap landed as two separate
+// single taps (so the part picker always reopened on "Wire" instead of advancing): a real
+// double-tap's two taps can land anywhere from well under a second to ~2s apart, especially
+// under accessibility touch passthrough, and the picker's pairing window must cover that.
+describe('isPairedTap: one-finger double-tap timing (real-phone gaps)', () => {
+  it.each([500, 900, 1400, 2000])('pairs a 1-finger double-tap with a %dms gap', (gapMs) => {
+    expect(isPairedTap(gapMs, 0, 50, 50, 55, 48, ONE_FINGER_DOUBLE_TAP_WINDOW_MS, DOUBLE_TAP_MAX_DIST)).toBe(true)
+  })
+
+  it('still rejects a gap beyond the window, so an old single tap can never pair with an unrelated later one', () => {
+    expect(isPairedTap(3000, 0, 50, 50, 55, 48, ONE_FINGER_DOUBLE_TAP_WINDOW_MS, DOUBLE_TAP_MAX_DIST)).toBe(false)
+  })
+
+  it('the narrower 2-finger window would have missed these same real-world gaps (why it needed its own constant)', () => {
+    for (const gapMs of [500, 900, 1400, 2000]) {
+      expect(isPairedTap(gapMs, 0, 50, 50, 55, 48, TWO_FINGER_DOUBLE_TAP_WINDOW_MS, DOUBLE_TAP_MAX_DIST)).toBe(false)
+    }
   })
 })
 

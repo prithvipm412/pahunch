@@ -1,6 +1,18 @@
 import type { GridPoint } from '../contracts/netlist'
 import type { Direction } from './machine'
 
+// The 1-finger double-tap pairing window — opens/advances the part picker, or toggles a placed
+// switch. On a real phone (especially under accessibility touch passthrough) the gap between
+// the two taps of one intended double-tap routinely runs well past the snappy ~300ms a mouse
+// click-pair needs, up to roughly 2s — too tight a window here was why every double-tap landed
+// as two separate single taps instead of one DOUBLE_TAP, so the picker always reopened on "Wire"
+// instead of advancing. Wide enough to cover that, with margin.
+export const ONE_FINGER_DOUBLE_TAP_WINDOW_MS = 2500
+// The 2-finger double-tap pairing window (restart lesson) — unaffected by the above, kept at the
+// original snappy timing since it isn't the gesture that was misfiring.
+export const TWO_FINGER_DOUBLE_TAP_WINDOW_MS = 350
+export const DOUBLE_TAP_MAX_DIST = 44
+
 // Classifies a drag delta as one of the four cardinal swipe directions, or null if the
 // movement is too small to count as a swipe yet.
 export function classifySwipe(dx: number, dy: number, minDistance: number): Direction | null {

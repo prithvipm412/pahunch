@@ -77,6 +77,7 @@ export type SparshEvent =
   | { type: 'SINGLE_TAP' } // one-finger tap, confirmed not to be the first half of a double-tap
   | { type: 'DOUBLE_TAP' } // one-finger double-tap: advance the part picker, or toggle a switch
   | { type: 'HOLD' } // one-finger press held >= 600ms without moving: cancel the part picker
+  | { type: 'PICKER_IDLE_TIMEOUT' } // no picker-relevant gesture for 10s: close it, same as HOLD
   | { type: 'TWO_FINGER_TAP' }
   | { type: 'TWO_FINGER_HOLD' }
   | { type: 'TWO_FINGER_SWIPE_DOWN' }
@@ -656,6 +657,14 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       if (state.mode !== 'build') return noChange(state)
       if (state.buildSub.kind !== 'partChosen') return noChange(state) // nothing open to cancel
       return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [{ type: 'speak', clips: ['cancelled'] }] }
+    }
+
+    // index.tsx restarts this 10s timer every time the picker opens or advances, and clears it
+    // once the picker closes any other way (placed/cancelled). Closing it silently here (no
+    // speech) — unlike HOLD, this is a courtesy background cleanup, not something the student did.
+    case 'PICKER_IDLE_TIMEOUT': {
+      if (state.buildSub.kind !== 'partChosen') return noChange(state)
+      return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [] }
     }
 
     case 'TWO_FINGER_TAP': {

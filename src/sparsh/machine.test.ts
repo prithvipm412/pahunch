@@ -170,6 +170,17 @@ describe('sparshReducer: the one-finger cycle picker', () => {
     expect(advanced.state.buildSub).toEqual({ kind: 'partChosen', partType: 'bulb' })
     expect(advanced.state.netlist.components.find((c) => c.type === 'switch')).toMatchObject({ closed: false })
   })
+
+  it('PICKER_IDLE_TIMEOUT silently closes an open picker, same as HOLD, but is a no-op from idle', () => {
+    const idle = sparshReducer(createInitialState(), { type: 'PICKER_IDLE_TIMEOUT' })
+    expect(idle.state.buildSub).toEqual({ kind: 'idle' })
+    expect(idle.effects).toEqual([])
+
+    const chosen = choosePart(createInitialState(), 'resistor')
+    const { state, effects } = sparshReducer(chosen, { type: 'PICKER_IDLE_TIMEOUT' })
+    expect(state.buildSub).toEqual({ kind: 'idle' })
+    expect(effects).toEqual([]) // unlike HOLD, this is a silent background cleanup
+  })
 })
 
 describe('sparshReducer: placement', () => {
