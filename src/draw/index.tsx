@@ -18,6 +18,7 @@ import { useRef, useState, useCallback, useMemo, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import type { Netlist, CircuitComponent, ComponentType, GridPoint, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
+import { haptic } from '../audio/haptics'
 import { processImage, BlurryImageError } from './imageUtils'
 import { scanCircuit } from './scanApi'
 import CircuitSVG from './CircuitSVG'
@@ -108,6 +109,7 @@ export default function DrawScreen() {
 
   const handleFile = useCallback(
     async (file: File | Blob, options?: { skipBlur?: boolean }) => {
+      haptic('send')
       setPhase({ kind: 'processing' })
 
       let base64: string
@@ -117,6 +119,7 @@ export default function DrawScreen() {
         base64 = result.base64
         previewUrl = result.previewUrl
       } catch (err) {
+        haptic('invalid')
         if (err instanceof BlurryImageError) {
           setPhase({ kind: 'error', message: s.blurry_msg, blurry: true })
         } else {
@@ -129,6 +132,7 @@ export default function DrawScreen() {
       const hash = hashBase64(base64)
       const cached = getCachedScan(hash)
       if (cached) {
+        haptic('scan_success')
         setPhase({
           kind: 'result',
           previewUrl,
@@ -143,6 +147,7 @@ export default function DrawScreen() {
 
       const first = await scanCircuit(base64)
       if (!first.ok) {
+        haptic('invalid')
         if (first.reason === 'network') {
           saveToQueue(base64)
           setPhase({
@@ -204,6 +209,7 @@ export default function DrawScreen() {
         isDemo,
       })
 
+      haptic('scan_success')
       setPhase({
         kind: 'result',
         previewUrl,

@@ -19,7 +19,10 @@ const activeAudioNodes = new Set<AudioNode>()
 const pendingTimers = new Set<number>()
 let sonifyTimer: number | null = null
 
-function getAudioContext(): AudioContext | null {
+/** Returns the single shared AudioContext (same instance sonify()/unlockAudio() use), or null
+ * if Web Audio is unavailable. Exported so feedbackSounds.ts can play its stingers through it
+ * rather than opening a second context. */
+export function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null
   const AudioContextConstructor = window.AudioContext
   if (!AudioContextConstructor) return null

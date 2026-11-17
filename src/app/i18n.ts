@@ -31,6 +31,7 @@ const messages = {
     voltageValue: 'Voltage',
     howManyOhms: 'How many ohms?', howManyVolts: 'How many volts?', done: 'Done',
     partMoving: 'Drag to move this part.', moveBlocked: 'That spot is occupied.',
+    vibrationOn: 'Vibration: On', vibrationOff: 'Vibration: Off',
   },
   kn: {
     welcome: 'ಮಾಡುತ್ತಾ ಕಲಿಯಿರಿ', build: 'ಕಟ್ಟಿ', draw: 'ಚಿತ್ರಿಸಿ', sparsh: 'ಸ್ಪರ್ಶ', learn: 'ಕಲಿಯಿರಿ',
@@ -65,6 +66,7 @@ const messages = {
     voltageValue: 'ವೋಲ್ಟೇಜ್',
     howManyOhms: 'ಎಷ್ಟು ಓಮ್?', howManyVolts: 'ಎಷ್ಟು ವೋಲ್ಟ್?', done: 'ಆಯಿತು',
     partMoving: 'ಈ ಭಾಗವನ್ನು ಎಳೆಯಿರಿ.', moveBlocked: 'ಆ ಜಾಗದಲ್ಲಿ ಇನ್ನೊಂದು ಭಾಗ ಇದೆ.',
+    vibrationOn: 'ಕಂಪನ: ಆನ್', vibrationOff: 'ಕಂಪನ: ಆಫ್',
   },
 } as const
 

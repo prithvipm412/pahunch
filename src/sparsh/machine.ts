@@ -1,5 +1,7 @@
 import type { CircuitComponent, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { describeCircuit } from '../physics/describe'
+import { classifyCircuitStatus, type CircuitStatus } from '../audio/feedbackSounds'
+import type { HapticName } from '../audio/haptics'
 import { countClipFor, partClipFor, posClipFor, PART_MENU_ORDER, type ClipName } from './clips'
 
 export const GRID_SIZE = 5
@@ -82,35 +84,42 @@ export type SparshEvent =
 
 export type SparshEffect =
   | { type: 'speak'; clips: ClipName[] }
-  | { type: 'vibrate'; pattern: number | number[] }
+  // A named pattern from src/audio/haptics.ts — index.tsx fires it with `essential: true`
+  // (Sparsh's vibration is a primary feedback channel, not a decorative flourish, so it's
+  // never suppressed by prefers-reduced-motion).
+  | { type: 'haptic'; name: HapticName }
+  // Circuit status after a solve(): drives BOTH the haptic (via hapticForCircuitStatus) and the
+  // matching synthesized sound (via playCircuitStatusSound) — kept as one effect so the two
+  // always agree on which bucket a result landed in.
+  | { type: 'circuitStatus'; status: CircuitStatus }
   | { type: 'solve' }
   | { type: 'sonifyStart'; result: SolveResult }
   | { type: 'sonifyStop' }
   | { type: 'stopAll' }
   | { type: 'navigateHome' }
+  // Lets a successful run's status sound/haptic land first, with the continuous sonify() tone
+  // starting ~0.8s later so the two signals don't clash.
+  | { type: 'delay'; ms: number }
 
 export interface SparshTransition {
   state: SparshState
   effects: SparshEffect[]
 }
 
-const EDGE_VIBRATION = [30, 40, 30]
-const MOVE_TICK_VIBRATION = 10
-const TAP_TICK_VIBRATION = 8
-const PULSE_VIBRATION = 25
-const UNDO_VIBRATION = [15, 40, 15]
-
 const MAX_HISTORY = 50
 const EXIT_CONFIRM_WINDOW_MS = 3000
+const RUN_SONIFY_DELAY_MS = 800
 
-// Each part gets its own vibration pattern the moment it's chosen (not when placed), so a
-// blind student can feel which part they picked without waiting for speech.
-const CHOICE_VIBRATION: Record<ComponentType, number[]> = {
-  wire: [20],
-  bulb: [20, 60, 20],
-  resistor: [20, 60, 20, 60, 20],
-  battery: [80],
-  switch: [40, 40, 80],
+// Each part's own "place" haptic signature (src/audio/haptics.ts), fired the moment it's
+// actually placed, so a blind student can feel *what* they just placed without waiting for
+// speech. (Choosing a part, before placement, gets a generic 'select' pulse instead — see
+// choosePart() below.)
+const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
+  wire: 'place_wire',
+  battery: 'place_battery',
+  bulb: 'place_bulb',
+  resistor: 'place_resistor',
+  switch: 'place_switch',
 }
 
 export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
@@ -291,7 +300,7 @@ function choosePart(state: SparshState, partType: ComponentType): SparshTransiti
     state: { ...state, pendingTapCount: 0, buildSub: { kind: 'partChosen', partType } },
     effects: [
       { type: 'speak', clips: [partClipFor(partType), 'swipe_destination'] },
-      { type: 'vibrate', pattern: CHOICE_VIBRATION[partType] },
+      { type: 'haptic', name: 'select' },
     ],
   }
 }
@@ -319,13 +328,13 @@ function resolveTapCount(state: SparshState, rawCount: number): SparshTransition
 function handleCursorMove(state: SparshState, direction: Direction): SparshTransition {
   const next = neighborInDirection(state.cursor, direction, state.netlist.gridSize)
   if (!next) {
-    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'vibrate', pattern: EDGE_VIBRATION }] }
+    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'haptic', name: 'invalid' }] }
   }
   const component = findComponentAt(state.netlist, next)
   const clips: ClipName[] = [posClipFor(next.row, next.col), component ? partClipFor(component.type) : 'empty']
   return {
     state: { ...state, cursor: next },
-    effects: [{ type: 'speak', clips }, { type: 'vibrate', pattern: MOVE_TICK_VIBRATION }],
+    effects: [{ type: 'speak', clips }, { type: 'haptic', name: 'tap' }],
   }
 }
 
@@ -333,10 +342,10 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
   const { netlist, cursor } = state
   const neighbor = neighborInDirection(cursor, direction, netlist.gridSize)
   if (!neighbor) {
-    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'vibrate', pattern: EDGE_VIBRATION }] }
+    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'haptic', name: 'invalid' }] }
   }
   if (segmentOccupied(netlist, cursor, neighbor)) {
-    return { state, effects: [{ type: 'speak', clips: ['segment_occupied'] }] }
+    return { state, effects: [{ type: 'speak', clips: ['segment_occupied'] }, { type: 'haptic', name: 'invalid' }] }
   }
 
   const component: CircuitComponent = {
@@ -359,7 +368,7 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
       buildSub: nextBuildSub,
       history: pushHistory(state, [partClipFor(partType), 'removed_suffix']),
     },
-    effects: [{ type: 'speak', clips: ['placed', partClipFor(partType)] }],
+    effects: [{ type: 'speak', clips: ['placed', partClipFor(partType)] }, { type: 'haptic', name: PLACE_HAPTIC[partType] }],
   })
 }
 
@@ -371,18 +380,41 @@ function handleBuildSwipe(state: SparshState, direction: Direction): SparshTrans
   return handleCursorMove(cleared, direction)
 }
 
+// feedbackFor() is the pure (event, solveResult) -> feedback mapping the task asks for. It's
+// deliberately scoped to the one feedback decision that depends ONLY on the event (+ its
+// result) and nothing else in SparshState: every other haptic in this file (tap/select/place/
+// delete/undo/invalid/...) also depends on broader state — cursor position, what's chosen,
+// segment occupancy, history — so those stay exercised by the ordinary transition tests above/
+// below instead of a second, parallel pure function that would have to duplicate that state.
+export function feedbackFor(event: SparshEvent, solveResult?: SolveResult | null): CircuitStatus | null {
+  if (event.type !== 'SOLVE_RESULT') return null
+  return classifyCircuitStatus(solveResult ?? event.result)
+}
+
 function handleSolveResult(state: SparshState, result: SolveResult): SparshTransition {
   if (result.errors.includes('empty') || result.errors.includes('no_battery')) {
-    return { state: { ...state, lastResult: result }, effects: [{ type: 'speak', clips: ['nothing_to_run'] }] }
+    return {
+      state: { ...state, lastResult: result },
+      effects: [{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['nothing_to_run'] }],
+    }
   }
   if (result.errors.includes('short_circuit')) {
-    return { state: { ...state, lastResult: result }, effects: [{ type: 'speak', clips: ['short_circuit'] }] }
+    return {
+      state: { ...state, lastResult: result },
+      effects: [{ type: 'circuitStatus', status: 'broken' }, { type: 'speak', clips: ['short_circuit'] }],
+    }
   }
   if (result.errors.includes('open_circuit')) {
-    return { state: { ...state, lastResult: result }, effects: [{ type: 'speak', clips: ['open_circuit'] }] }
+    return {
+      state: { ...state, lastResult: result },
+      effects: [{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['open_circuit'] }],
+    }
   }
   if (!result.ok) {
-    return { state: { ...state, lastResult: result }, effects: [{ type: 'speak', clips: ['nothing_to_run'] }] }
+    return {
+      state: { ...state, lastResult: result },
+      effects: [{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['nothing_to_run'] }],
+    }
   }
 
   const clips: ClipName[] = ['run']
@@ -395,15 +427,30 @@ function handleSolveResult(state: SparshState, result: SolveResult): SparshTrans
     lesson = null
   }
 
+  const nextState: SparshState = {
+    ...state,
+    lastResult: result,
+    mode: 'explore',
+    explore: { point: state.cursor, overComponentId: null },
+    lesson,
+  }
+
+  // ok === true and no short_circuit error, but a bulb can still be individually overloaded
+  // (that error only fires when the *battery's* own current trips the limit) — still a
+  // successful run, so the lesson/run clips speak as normal, but the danger haptic+sound
+  // replaces the "working" ones as a safety signal, with no extra delay before sonify.
+  if (result.components.some((c) => c.state === 'overload')) {
+    return { state: nextState, effects: [{ type: 'circuitStatus', status: 'broken' }, { type: 'speak', clips }, { type: 'sonifyStart', result }] }
+  }
+
   return {
-    state: {
-      ...state,
-      lastResult: result,
-      mode: 'explore',
-      explore: { point: state.cursor, overComponentId: null },
-      lesson,
-    },
-    effects: [{ type: 'speak', clips }, { type: 'sonifyStart', result }],
+    state: nextState,
+    effects: [
+      { type: 'circuitStatus', status: 'working' },
+      { type: 'delay', ms: RUN_SONIFY_DELAY_MS },
+      { type: 'sonifyStart', result },
+      { type: 'speak', clips },
+    ],
   }
 }
 
@@ -416,7 +463,7 @@ function handleDrag(state: SparshState, point: GridPoint): SparshTransition {
   const component = findComponentAt(state.netlist, clamped)
   const overComponentId = component?.id ?? null
   const changed = overComponentId !== state.explore.overComponentId
-  const effects: SparshEffect[] = changed && overComponentId ? [{ type: 'vibrate', pattern: PULSE_VIBRATION }] : []
+  const effects: SparshEffect[] = changed && overComponentId ? [{ type: 'haptic', name: 'select' }] : []
   return {
     state: { ...state, explore: { point: clamped, overComponentId } },
     effects,
@@ -442,7 +489,7 @@ function handleRemoveAtCursor(state: SparshState): SparshTransition {
       netlist: { ...state.netlist, components: state.netlist.components.filter((c) => c.id !== component.id) },
       history: pushHistory(state, [partClipFor(component.type), 'is_back']),
     },
-    effects: [{ type: 'speak', clips: ['removed', partClipFor(component.type)] }],
+    effects: [{ type: 'speak', clips: ['removed', partClipFor(component.type)] }, { type: 'haptic', name: 'delete' }],
   })
 }
 
@@ -461,7 +508,7 @@ function handleToggleSwitchAtCursor(state: SparshState): SparshTransition {
       },
       history: pushHistory(state, [switchClipFor(component.closed === true)]),
     },
-    effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }],
+    effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }, { type: 'haptic', name: 'toggle_switch' }],
   })
 }
 
@@ -492,7 +539,7 @@ function popHistory(state: SparshState): SparshTransition {
     },
     effects: [
       { type: 'speak', clips: ['undone', ...entry.undoneClips, posClipFor(entry.cursor.row, entry.cursor.col)] },
-      { type: 'vibrate', pattern: UNDO_VIBRATION },
+      { type: 'haptic', name: 'undo' },
     ],
   }
 }
@@ -526,7 +573,7 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       if (state.mode !== 'build') return noChange(state)
       return {
         state: { ...state, pendingTapCount: state.pendingTapCount + 1 },
-        effects: [{ type: 'vibrate', pattern: TAP_TICK_VIBRATION }],
+        effects: [{ type: 'haptic', name: 'tap' }],
       }
 
     case 'TAP_FINALIZE': {

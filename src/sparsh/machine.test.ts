@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
-import { createInitialState, sparshReducer, type Direction, type SparshState } from './machine'
+import { createInitialState, feedbackFor, sparshReducer, type Direction, type SparshState } from './machine'
 
 function step(state: SparshState, event: Parameters<typeof sparshReducer>[1]) {
   return sparshReducer(state, event).state
@@ -47,7 +47,7 @@ describe('sparshReducer: cursor movement', () => {
     expect(state.cursor).toEqual({ row: 0, col: 1 })
     expect(effects).toEqual([
       { type: 'speak', clips: ['pos_r1c2', 'empty'] },
-      { type: 'vibrate', pattern: 10 },
+      { type: 'haptic', name: 'tap' },
     ])
   })
 
@@ -56,7 +56,7 @@ describe('sparshReducer: cursor movement', () => {
     expect(state.cursor).toEqual({ row: 0, col: 0 })
     expect(effects).toEqual([
       { type: 'speak', clips: ['edge'] },
-      { type: 'vibrate', pattern: [30, 40, 30] },
+      { type: 'haptic', name: 'invalid' },
     ])
   })
 
@@ -76,7 +76,7 @@ describe('sparshReducer: one-finger tap counting', () => {
   it('ticks on every raw tap without speaking', () => {
     const { state, effects } = sparshReducer(createInitialState(), { type: 'TAP' })
     expect(state.pendingTapCount).toBe(1)
-    expect(effects).toEqual([{ type: 'vibrate', pattern: 8 }])
+    expect(effects).toEqual([{ type: 'haptic', name: 'tap' }])
   })
 
   it('TAP_FINALIZE with count 1 while idle repeats position and part', () => {
@@ -90,12 +90,12 @@ describe('sparshReducer: one-finger tap counting', () => {
     expect(effects).toEqual([])
   })
 
-  it('2 taps choose wire, with its own vibration pattern', () => {
+  it('2 taps choose wire, with a selection pulse', () => {
     const { state, effects } = tapCount(createInitialState(), 2)
     expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
     expect(effects).toEqual([
       { type: 'speak', clips: ['wire', 'swipe_destination'] },
-      { type: 'vibrate', pattern: [20] },
+      { type: 'haptic', name: 'select' },
     ])
   })
 
@@ -104,7 +104,7 @@ describe('sparshReducer: one-finger tap counting', () => {
     expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'bulb' })
     expect(effects).toEqual([
       { type: 'speak', clips: ['bulb', 'swipe_destination'] },
-      { type: 'vibrate', pattern: [20, 60, 20] },
+      { type: 'haptic', name: 'select' },
     ])
   })
 
@@ -113,7 +113,7 @@ describe('sparshReducer: one-finger tap counting', () => {
     expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'resistor' })
     expect(effects).toEqual([
       { type: 'speak', clips: ['resistor', 'swipe_destination'] },
-      { type: 'vibrate', pattern: [20, 60, 20, 60, 20] },
+      { type: 'haptic', name: 'select' },
     ])
   })
 
@@ -144,7 +144,7 @@ describe('sparshReducer: hold vs tap-then-hold', () => {
     expect(state.buildSub).toEqual({ kind: 'partChosen', partType: 'battery' })
     expect(effects).toEqual([
       { type: 'speak', clips: ['battery', 'swipe_destination'] },
-      { type: 'vibrate', pattern: [80] },
+      { type: 'haptic', name: 'select' },
     ])
   })
 
@@ -156,7 +156,7 @@ describe('sparshReducer: hold vs tap-then-hold', () => {
     expect(state.pendingTapCount).toBe(0)
     expect(effects).toEqual([
       { type: 'speak', clips: ['switch', 'swipe_destination'] },
-      { type: 'vibrate', pattern: [40, 40, 80] },
+      { type: 'haptic', name: 'select' },
     ])
   })
 
@@ -183,7 +183,7 @@ describe('sparshReducer: placement', () => {
   it('places the chosen part, speaks "Placed <part>", deselects, and moves the cursor there', () => {
     const chosen = tapCount(createInitialState(), 3).state // bulb
     const { state, effects } = sparshReducer(chosen, { type: 'SWIPE', direction: 'right' })
-    expect(effects).toEqual([{ type: 'speak', clips: ['placed', 'bulb'] }])
+    expect(effects).toEqual([{ type: 'speak', clips: ['placed', 'bulb'] }, { type: 'haptic', name: 'place_bulb' }])
     expect(state.buildSub).toEqual({ kind: 'idle' })
     expect(state.cursor).toEqual({ row: 0, col: 1 })
     expect(state.netlist.components).toEqual([
@@ -195,7 +195,7 @@ describe('sparshReducer: placement', () => {
     const chosen = tapCount(createInitialState(), 2).state // wire
     const first = sparshReducer(chosen, { type: 'SWIPE', direction: 'right' })
     expect(first.state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
-    expect(first.effects).toEqual([{ type: 'speak', clips: ['placed', 'wire'] }])
+    expect(first.effects).toEqual([{ type: 'speak', clips: ['placed', 'wire'] }, { type: 'haptic', name: 'place_wire' }])
 
     const second = sparshReducer(first.state, { type: 'SWIPE', direction: 'down' })
     expect(second.state.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
@@ -212,7 +212,7 @@ describe('sparshReducer: placement', () => {
     expect(state.netlist.components).toHaveLength(0)
     expect(effects).toEqual([
       { type: 'speak', clips: ['edge'] },
-      { type: 'vibrate', pattern: [30, 40, 30] },
+      { type: 'haptic', name: 'invalid' },
     ])
   })
 
@@ -223,7 +223,7 @@ describe('sparshReducer: placement', () => {
     // cursor is now at (0,1); swiping left targets the same segment (0,1)-(0,0) again
     expect(refused.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
     expect(refused.netlist.components).toHaveLength(1)
-    expect(effects).toEqual([{ type: 'speak', clips: ['segment_occupied'] }])
+    expect(effects).toEqual([{ type: 'speak', clips: ['segment_occupied'] }, { type: 'haptic', name: 'invalid' }])
   })
 
 })
@@ -256,7 +256,7 @@ describe('sparshReducer: two-finger swipe down (remove)', () => {
     state = { ...state, cursor: { row: 0, col: 0 } } // both parts touch (0,0); resistor placed later
 
     const { state: removed, effects } = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_DOWN' })
-    expect(effects).toEqual([{ type: 'speak', clips: ['removed', 'resistor'] }])
+    expect(effects).toEqual([{ type: 'speak', clips: ['removed', 'resistor'] }, { type: 'haptic', name: 'delete' }])
     expect(removed.netlist.components).toHaveLength(1)
     expect(removed.netlist.components[0].type).toBe('bulb')
   })
@@ -275,11 +275,11 @@ describe('sparshReducer: two-finger swipe up (toggle switch)', () => {
     state = step(state, { type: 'SWIPE', direction: 'right' }) // switch (0,0)->(0,1), cursor -> (0,1)
 
     const toggled = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_UP' })
-    expect(toggled.effects).toEqual([{ type: 'speak', clips: ['switch_closed'] }])
+    expect(toggled.effects).toEqual([{ type: 'speak', clips: ['switch_closed'] }, { type: 'haptic', name: 'toggle_switch' }])
     expect(toggled.state.netlist.components[0]).toMatchObject({ closed: true })
 
     const toggledBack = sparshReducer(toggled.state, { type: 'TWO_FINGER_SWIPE_UP' })
-    expect(toggledBack.effects).toEqual([{ type: 'speak', clips: ['switch_open'] }])
+    expect(toggledBack.effects).toEqual([{ type: 'speak', clips: ['switch_open'] }, { type: 'haptic', name: 'toggle_switch' }])
     expect(toggledBack.state.netlist.components[0]).toMatchObject({ closed: false })
   })
 
@@ -355,7 +355,7 @@ describe('sparshReducer: two-finger swipe right (undo)', () => {
     expect(state.history).toHaveLength(0)
     expect(effects).toEqual([
       { type: 'speak', clips: ['undone', 'bulb', 'removed_suffix', 'pos_r1c1'] },
-      { type: 'vibrate', pattern: [15, 40, 15] },
+      { type: 'haptic', name: 'undo' },
     ])
   })
 
@@ -483,9 +483,41 @@ describe('sparshReducer: two-finger tap (run / explore)', () => {
     const { state, effects } = sparshReducer(createInitialState(), { type: 'SOLVE_RESULT', result: okResult })
     expect(state.mode).toBe('explore')
     expect(effects).toEqual([
-      { type: 'speak', clips: ['run'] },
+      { type: 'circuitStatus', status: 'working' },
+      { type: 'delay', ms: 800 },
       { type: 'sonifyStart', result: okResult },
+      { type: 'speak', clips: ['run'] },
     ])
+  })
+
+  it('reports "broken" and skips the sonify delay when a bulb is individually overloaded', () => {
+    const overloadResult: SolveResult = {
+      ok: true,
+      errors: [],
+      warnings: [],
+      components: [{ id: 'bulb1', voltage: 9, current: 0.9, power: 8, state: 'overload' }],
+    }
+    const { state, effects } = sparshReducer(createInitialState(), { type: 'SOLVE_RESULT', result: overloadResult })
+    expect(state.mode).toBe('explore')
+    expect(effects).toEqual([
+      { type: 'circuitStatus', status: 'broken' },
+      { type: 'speak', clips: ['run'] },
+      { type: 'sonifyStart', result: overloadResult },
+    ])
+  })
+
+  it('reports "not_working" for an empty circuit and "broken" for a short circuit', () => {
+    const empty = sparshReducer(createInitialState(), {
+      type: 'SOLVE_RESULT',
+      result: { ok: false, errors: ['empty'], warnings: [], components: [] },
+    })
+    expect(empty.effects).toEqual([{ type: 'circuitStatus', status: 'not_working' }, { type: 'speak', clips: ['nothing_to_run'] }])
+
+    const shorted = sparshReducer(createInitialState(), {
+      type: 'SOLVE_RESULT',
+      result: { ok: false, errors: ['short_circuit'], warnings: [], components: [] },
+    })
+    expect(shorted.effects).toEqual([{ type: 'circuitStatus', status: 'broken' }, { type: 'speak', clips: ['short_circuit'] }])
   })
 
   it('exits explore back to build and stops sonify on the next two-finger tap', () => {
@@ -507,7 +539,7 @@ describe('sparshReducer: two-finger tap (run / explore)', () => {
     }
     const onPart = sparshReducer(withBulb, { type: 'DRAG', point: { row: 0, col: 1 } })
     expect(onPart.state.explore?.overComponentId).toBe('bulb1')
-    expect(onPart.effects).toEqual([{ type: 'vibrate', pattern: 25 }])
+    expect(onPart.effects).toEqual([{ type: 'haptic', name: 'select' }])
 
     const stillOnPart = sparshReducer(onPart.state, { type: 'DRAG', point: { row: 0, col: 1 } })
     expect(stillOnPart.effects).toEqual([])
@@ -525,6 +557,37 @@ describe('sparshReducer: two-finger tap (run / explore)', () => {
     const dragged = sparshReducer(withBulb, { type: 'DRAG', point: { row: 0, col: 1 } }).state
     const { effects } = sparshReducer(dragged, { type: 'REST', point: { row: 0, col: 1 } })
     expect(effects).toEqual([{ type: 'speak', clips: ['bulb', 'state_normal'] }])
+  })
+})
+
+describe('feedbackFor: pure (event, solveResult) -> circuit-status mapping', () => {
+  it('is null for every event other than SOLVE_RESULT', () => {
+    expect(feedbackFor({ type: 'TAP' })).toBeNull()
+    expect(feedbackFor({ type: 'TWO_FINGER_TAP' })).toBeNull()
+    expect(feedbackFor({ type: 'SWIPE', direction: 'up' })).toBeNull()
+  })
+
+  it('reports "working" for an ok result with no overloaded components', () => {
+    const result: SolveResult = { ok: true, errors: [], warnings: [], components: [{ id: 'b1', voltage: 3, current: 0.3, power: 0.9, state: 'normal' }] }
+    expect(feedbackFor({ type: 'SOLVE_RESULT', result })).toBe('working')
+  })
+
+  it('reports "not_working" for empty/no_battery/open_circuit results', () => {
+    expect(feedbackFor({ type: 'SOLVE_RESULT', result: { ok: false, errors: ['empty'], warnings: [], components: [] } })).toBe('not_working')
+    expect(feedbackFor({ type: 'SOLVE_RESULT', result: { ok: false, errors: ['no_battery'], warnings: [], components: [] } })).toBe('not_working')
+    expect(feedbackFor({ type: 'SOLVE_RESULT', result: { ok: false, errors: ['open_circuit'], warnings: [], components: [] } })).toBe('not_working')
+  })
+
+  it('reports "broken" for a short circuit or any overloaded bulb', () => {
+    expect(feedbackFor({ type: 'SOLVE_RESULT', result: { ok: false, errors: ['short_circuit'], warnings: [], components: [] } })).toBe('broken')
+    const overloadResult: SolveResult = { ok: true, errors: [], warnings: [], components: [{ id: 'b1', voltage: 9, current: 0.9, power: 8, state: 'overload' }] }
+    expect(feedbackFor({ type: 'SOLVE_RESULT', result: overloadResult })).toBe('broken')
+  })
+
+  it('accepts an explicit solveResult override as its second argument', () => {
+    const event = { type: 'SOLVE_RESULT' as const, result: { ok: true, errors: [], warnings: [], components: [] } }
+    const overrideResult: SolveResult = { ok: false, errors: ['short_circuit'], warnings: [], components: [] }
+    expect(feedbackFor(event, overrideResult)).toBe('broken')
   })
 })
 
@@ -556,6 +619,7 @@ describe('sparshReducer: guided lesson', () => {
     expect(afterBattery.lesson).toEqual({ phase: 'series', stepIndex: 3 })
     expect(effects).toEqual([
       { type: 'speak', clips: ['placed', 'battery'] },
+      { type: 'haptic', name: 'place_battery' },
       { type: 'speak', clips: ['lesson_good', 'lesson_step_bulb1'] },
       { type: 'speak', clips: ['lesson_good', 'lesson_step_bulb2'] },
       { type: 'speak', clips: ['lesson_good', 'lesson_step_close_loop'] },
@@ -596,8 +660,10 @@ describe('sparshReducer: guided lesson', () => {
     expect(ran.state.mode).toBe('explore')
     expect(ran.state.lesson).toEqual({ phase: 'parallel', stepIndex: 0 })
     expect(ran.effects).toEqual([
-      { type: 'speak', clips: ['run', 'lesson_series_result'] },
+      { type: 'circuitStatus', status: 'working' },
+      { type: 'delay', ms: 800 },
       { type: 'sonifyStart', result: expect.objectContaining({ ok: true }) },
+      { type: 'speak', clips: ['run', 'lesson_series_result'] },
     ])
     state = ran.state
 
@@ -618,7 +684,7 @@ describe('sparshReducer: guided lesson', () => {
     state = step(state, { type: 'SWIPE', direction: 'down' }) // (0,1)->(1,1)
 
     const removed = sparshReducer(state, { type: 'TWO_FINGER_SWIPE_DOWN' })
-    expect(removed.effects).toEqual([{ type: 'speak', clips: ['removed', 'bulb'] }])
+    expect(removed.effects).toEqual([{ type: 'speak', clips: ['removed', 'bulb'] }, { type: 'haptic', name: 'delete' }])
     state = removed.state
 
     state = placePartHere(state, 2, 'left') // wire (1,1)->(1,0); cursor -> (1,0)
@@ -638,8 +704,10 @@ describe('sparshReducer: guided lesson', () => {
     const ranAgain = runAndDispatchResult(state)
     expect(ranAgain.state.lesson).toBeNull()
     expect(ranAgain.effects).toEqual([
-      { type: 'speak', clips: ['run', 'lesson_compare', 'lesson_complete'] },
+      { type: 'circuitStatus', status: 'working' },
+      { type: 'delay', ms: 800 },
       { type: 'sonifyStart', result: expect.objectContaining({ ok: true }) },
+      { type: 'speak', clips: ['run', 'lesson_compare', 'lesson_complete'] },
     ])
 
     const finalNetlist: Netlist = ranAgain.state.netlist

@@ -30,6 +30,8 @@ import type { Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
 import { describeCircuit } from '../physics/describe'
 import { playClip, playSequence, stopAll } from '../audio'
+import { haptic } from '../audio/haptics'
+import { successBell } from '../audio/feedbackSounds'
 import { useLanguage } from '../app/lang'
 import { useLearnStrings } from './useLearnStrings'
 import GlowCircuitSVG from './GlowCircuitSVG'
@@ -188,6 +190,7 @@ function CustomPredict({
       const result = solve(netlist)
       const actual = gradeResult(result, netlist)
       const correct = chosen === actual
+      haptic(correct ? 'learn_correct' : 'learn_wrong', { essential: true })
       setPhase({ kind: 'revealed', result, chosen, correct })
       const audio = challengeAudio(netlist, result)
       await playSequence(lang, [correct ? 'correct' : 'not_quite', audio.explain, audio.try])
@@ -345,6 +348,7 @@ function PredictGame({
     async (optionKey: string) => {
       const result = solve(question.netlist)
       const correct = optionKey === question.correctKey
+      haptic(correct ? 'learn_correct' : 'learn_wrong', { essential: true })
       setState((prev) => ({
         ...prev,
         phase: 'revealed',
@@ -364,6 +368,7 @@ function PredictGame({
       const nextIndex = prev.index + 1
       if (nextIndex >= PREDICT_QUESTIONS.length) {
         saveBestScore(BEST_PREDICT_KEY, prev.score)
+        successBell()
         return { ...prev, phase: 'end' }
       }
       return { index: nextIndex, score: prev.score, phase: 'question' }
@@ -476,12 +481,14 @@ function FaultGame({
       const lockedFirstTap = state.firstTapCorrect === undefined ? isCorrect : state.firstTapCorrect
 
       if (isCorrect) {
+        haptic('learn_correct', { essential: true })
         const fixedResult = solve(question.fixedNetlist)
         setState((prev) => ({ ...prev, phase: 'fixed', lastTapped: componentId, firstTapCorrect: lockedFirstTap, fixedResult }))
         await playSequence(lang, ['fault_correct', 'fault_fixed'], (name) =>
           name === 'fault_correct' ? s.fault_correct : s.fault_fixed,
         )
       } else {
+        haptic('learn_wrong', { essential: true })
         const newWrong = state.wrongTries + 1
         setState((prev) => ({ ...prev, wrongTries: newWrong, lastTapped: componentId, firstTapCorrect: lockedFirstTap }))
         const clips = newWrong >= 2 ? ['fault_wrong', 'fault_hint'] : ['fault_wrong']
@@ -500,6 +507,7 @@ function FaultGame({
       const nextIndex = prev.index + 1
       if (nextIndex >= FAULT_QUESTIONS.length) {
         saveBestScore(BEST_FAULT_KEY, newScore)
+        successBell()
         return { index: prev.index, score: newScore, wrongTries: 0, phase: 'end' }
       }
       return { index: nextIndex, score: newScore, wrongTries: 0, phase: 'playing' }

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { BrowserRouter, Link, Route, Routes, useLocation } from 'react-router-dom'
 import BuildScreen from './build'
 import DrawScreen from './draw'
@@ -9,6 +9,7 @@ import CircuitBackground from './app/CircuitBackground'
 import HeroCircuit from './app/HeroCircuit'
 import './app/app.css'
 import { stopAll, unlockAudio } from './audio'
+import { haptic, isHapticsEnabled, setHapticsEnabled } from './audio/haptics'
 
 function AudioLifecycle() {
   const location = useLocation()
@@ -79,20 +80,29 @@ function BulbBrainIcon() {
 function Home() {
   const { lang, setLang } = useLanguage()
   const t = useT()
+  const [vibrationOn, setVibrationOn] = useState(() => isHapticsEnabled())
   const links = [
     { to: '/build', label: t('build'), Icon: ResistorIcon },
     { to: '/draw', label: t('draw'), Icon: PencilWireIcon },
     { to: '/sparsh', label: t('sparsh'), Icon: HandIcon },
     { to: '/learn', label: t('learn'), Icon: BulbBrainIcon },
   ]
+  const toggleVibration = () => {
+    const next = !vibrationOn
+    setHapticsEnabled(next)
+    setVibrationOn(next)
+    if (next) haptic('tap', { essential: true })
+  }
   return (
     <main className="home-shell">
       <header className="home-header">
         <div className="brand-mark" aria-hidden="true">P</div>
         <div className="language-toggle" aria-label={t('language')}>
-          <button aria-pressed={lang === 'en'} onClick={() => { stopAll(); setLang('en') }}>EN</button>
+          <button aria-pressed={lang === 'en'} onClick={() => { haptic('tap'); stopAll(); setLang('en') }}>EN</button>
           <span aria-hidden="true">/</span>
-          <button aria-pressed={lang === 'kn'} onClick={() => { stopAll(); setLang('kn') }}>ಕನ್ನಡ</button>
+          <button aria-pressed={lang === 'kn'} onClick={() => { haptic('tap'); stopAll(); setLang('kn') }}>ಕನ್ನಡ</button>
+          <span aria-hidden="true">/</span>
+          <button aria-pressed={vibrationOn} onClick={toggleVibration}>{vibrationOn ? t('vibrationOn') : t('vibrationOff')}</button>
         </div>
       </header>
       <section className="home-intro">
@@ -101,7 +111,7 @@ function Home() {
         <p className="hero-tagline">{t('welcome')}</p>
       </section>
       <nav className="mode-grid" aria-label={t('homeModes')}>
-        {links.map((item, index) => <Link className="mode-card" to={item.to} key={item.to} style={{ animationDelay: `${index * 70}ms` }}><span className="mode-icon" aria-hidden="true"><item.Icon /></span><span>{item.label}</span><span className="mode-arrow" aria-hidden="true">→</span></Link>)}
+        {links.map((item, index) => <Link className="mode-card" to={item.to} key={item.to} style={{ animationDelay: `${index * 70}ms` }} onClick={() => haptic('tap')}><span className="mode-icon" aria-hidden="true"><item.Icon /></span><span>{item.label}</span><span className="mode-arrow" aria-hidden="true">→</span></Link>)}
       </nav>
       <p className="home-footer">{t('homeFooter')}</p>
     </main>

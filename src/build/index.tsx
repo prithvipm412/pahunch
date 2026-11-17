@@ -3,9 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import type { CircuitComponent, ComponentResult, ComponentType, GridPoint, Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
 import { stopAll, stopSonify } from '../audio'
+import { haptic, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
+import { classifyCircuitStatus, playCircuitStatusSound } from '../audio/feedbackSounds'
 import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
 import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
+
+const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
+  wire: 'place_wire', battery: 'place_battery', bulb: 'place_bulb', resistor: 'place_resistor', switch: 'place_switch',
+}
 
 const parts: { type: ComponentType; key: TranslationKey; icon: string }[] = [
   { type: 'battery', key: 'battery', icon: '▤' }, { type: 'bulb', key: 'bulb', icon: '◉' },
@@ -111,20 +117,21 @@ export default function BuildScreen() {
     setNotice(type === 'wire' ? translate('wireHint') : translate('hintChoose'))
   }
   function addComponent(from: GridPoint, to: GridPoint) {
-    if (from.row === to.row && from.col === to.col) { setNotice(translate('hintTwoDots')); setFirstPoint(null); return }
-    if (from.row !== to.row && from.col !== to.col) { setNotice(translate('hintSameLine')); setFirstPoint(null); return }
+    if (from.row === to.row && from.col === to.col) { haptic('invalid'); setNotice(translate('hintTwoDots')); setFirstPoint(null); return }
+    if (from.row !== to.row && from.col !== to.col) { haptic('invalid'); setNotice(translate('hintSameLine')); setFirstPoint(null); return }
     const type = placing
     if (!type) return
     if (type === 'wire') {
       const expectedEdges = Math.abs(to.row - from.row) + Math.abs(to.col - from.col)
       if (wireSegmentsForDragPath([from, to], netlist.components).length !== expectedEdges) {
-        setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
+        haptic('invalid'); setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
       }
     }
     const newComponent: CircuitComponent = { id: `build-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, type, from, to, ...((type === 'battery' || type === 'bulb' || type === 'resistor') ? { value: type === 'battery' ? 3 : 10 } : {}), ...(type === 'switch' ? { closed: true } : {}) }
     if (type !== 'wire' && netlist.components.some((component) => componentsOverlap(newComponent, component))) {
-      setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
+      haptic('invalid'); setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
     }
+    haptic(PLACE_HAPTIC[type])
     saveNetlist({ ...netlist, source: 'build', components: [...netlist.components, newComponent] })
     if (type !== 'wire') {
       setPlacing(null); setSelectedId(newComponent.id)
@@ -215,12 +222,14 @@ export default function BuildScreen() {
     const drag = partDragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return false
     if (event.type === 'pointerup' && drag.moved && drag.valid) {
+      haptic('tap')
       saveNetlist({ ...netlist, source: 'build', components: netlist.components.map((component) => component.id === drag.component.id ? drag.candidate : component) }, true)
       setSelectedId(drag.component.id)
       setEditOpen(false)
       suppressPartClickRef.current = true
       setNotice(translate('partMoving'))
     } else if (drag.moved && !drag.valid) {
+      haptic('invalid')
       suppressPartClickRef.current = true
       setNotice(translate('moveBlocked'))
     }
@@ -234,6 +243,7 @@ export default function BuildScreen() {
     const point = canvasPoint(event, event.currentTarget)
     const snapped = nearestGridPoint(point)
     if (!snapped) return
+    haptic('tap')
     event.currentTarget.setPointerCapture(event.pointerId)
     suppressWireClickRef.current = false
     const drag: WireDrag = { pointerId: event.pointerId, startNetlist: netlist, path: [snapped], addedComponents: [] }
@@ -305,18 +315,24 @@ export default function BuildScreen() {
 
   function updateSelected(changes: Partial<CircuitComponent>) {
     if (!selectedId) return
+    haptic('select')
     saveNetlist({ ...netlist, components: netlist.components.map((component) => component.id === selectedId ? { ...component, ...changes } : component) }, true)
   }
   function runCircuit() {
     stopAll()
+    let next: SolveResult
     try {
-      const next = solve(netlist)
+      next = solve(netlist)
       setResult(next); setSelectedId(null)
       if (next.ok) setNotice(translate('resultsUpdated'))
       else setNotice(translate('checkCircuit'))
     } finally {
       stopAll()
     }
+    // Fired after stopAll()'s own navigator.vibrate(0) cleanup above, so it isn't immediately cancelled.
+    const status = classifyCircuitStatus(next)
+    haptic(hapticForCircuitStatus(status), { essential: true })
+    playCircuitStatusSound(status)
   }
   const friendlyErrors = result?.errors.map((error) => error === 'no_battery' || error === 'empty' ? translate('noBattery') : error === 'short_circuit' ? translate('shortCircuit') : error === 'open_circuit' ? translate('openCircuit') : translate('otherError'))
   function clearCircuit() {
@@ -327,6 +343,7 @@ export default function BuildScreen() {
   function undoLast() {
     const previous = undoStack[undoStack.length - 1]
     if (!previous) return
+    haptic('undo')
     setNetlist(previous); setUndoStack((history) => history.slice(0, -1)); setSelectedId(null); setEditOpen(false); setResult(null); stopSonify(); setNotice(translate('hintStart'))
   }
 
@@ -353,7 +370,7 @@ export default function BuildScreen() {
       {selected.type === 'resistor' && <div className="preset-row">{[5, 10, 20, 50, 100].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
       {selected.type === 'bulb' && <div className="preset-row">{[5, 10, 20].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
       {selected.type === 'switch' && <div className="preset-row"><button aria-pressed={selected.closed !== false} onClick={() => updateSelected({ closed: true })}>{translate('closed')}</button><button aria-pressed={selected.closed === false} onClick={() => updateSelected({ closed: false })}>{translate('open')}</button></div>}
-      <div className="edit-actions"><button onClick={() => { saveNetlist({ ...netlist, components: netlist.components.filter((component) => component.id !== selected.id) }); setSelectedId(null); setEditOpen(false) }}>{translate('delete')}</button><button className="edit-done" onClick={() => setEditOpen(false)}>{translate('done')}</button></div>
+      <div className="edit-actions"><button onClick={() => { haptic('delete'); saveNetlist({ ...netlist, components: netlist.components.filter((component) => component.id !== selected.id) }); setSelectedId(null); setEditOpen(false) }}>{translate('delete')}</button><button className="edit-done" onClick={() => setEditOpen(false)}>{translate('done')}</button></div>
       {resultMap.has(selected.id) && <span className="selected-readout">{translate('voltage')}: {resultMap.get(selected.id)!.voltage.toFixed(2)} V · {translate('current')}: {resultMap.get(selected.id)!.current.toFixed(3)} A · {translate('power')}: {resultMap.get(selected.id)!.power.toFixed(3)} W</span>}
     </section></div>}
     {result && <section className="result-panel" aria-live="polite" aria-label={translate('runResults')}>

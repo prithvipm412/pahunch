@@ -2,7 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import type { CircuitComponent, GridPoint } from '../contracts/netlist'
 import { solve } from '../physics'
-import { getAudioGeneration, isAudioGenerationCurrent, playSequence, sonify, stopAll, stopSonify, vibrate } from '../audio'
+import { getAudioGeneration, isAudioGenerationCurrent, playSequence, sonify, stopAll, stopSonify } from '../audio'
+import { haptic, hapticForCircuitStatus } from '../audio/haptics'
+import { playCircuitStatusSound } from '../audio/feedbackSounds'
 import { useLanguage } from '../app/lang'
 import { fallbackFor } from './clips'
 import { classifySwipe, isEdgeStart, isPairedTap, pointFromClient, resolveFingerClass } from './gestures'
@@ -94,8 +96,13 @@ export default function SparshScreen() {
         if (effect.type === 'speak') {
           setCaption(effect.clips.map(fallbackFor).join(' · '))
           await playSequence(lang, effect.clips, (clip) => fallbackFor(clip as Parameters<typeof fallbackFor>[0]))
-        } else if (effect.type === 'vibrate') {
-          vibrate(effect.pattern)
+        } else if (effect.type === 'haptic') {
+          haptic(effect.name, { essential: true })
+        } else if (effect.type === 'circuitStatus') {
+          haptic(hapticForCircuitStatus(effect.status), { essential: true })
+          playCircuitStatusSound(effect.status)
+        } else if (effect.type === 'delay') {
+          await new Promise<void>((resolve) => { window.setTimeout(resolve, effect.ms) })
         } else if (effect.type === 'solve') {
           const result = solve(stateRef.current.netlist)
           dispatch({ type: 'SOLVE_RESULT', result })
