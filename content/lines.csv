@@ -202,3 +202,8 @@ volts_3,3 volts,ಮೂರು ವೋಲ್ಟ್
 volts_4_5,4.5 volts,ನಾಲ್ಕೂವರೆ ವೋಲ್ಟ್
 volts_6,6 volts,ಆರು ವೋಲ್ಟ್
 volts_9,9 volts,ಒಂಬತ್ತು ವೋಲ್ಟ್
+already_wire,Wire already placed here.,ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ತಂತಿ ಇದೆ.
+already_bulb,Bulb already placed here.,ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಬಲ್ಬ್ ಇದೆ.
+already_resistor,Resistor already placed here.,ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ರೋಧಕ ಇದೆ.
+already_switch,Switch already placed here.,ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಸ್ವಿಚ್ ಇದೆ.
+already_battery,Battery already placed here.,ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಬ್ಯಾಟರಿ ಇದೆ.

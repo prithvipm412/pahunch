@@ -218,17 +218,19 @@ describe('sparshReducer: placement', () => {
     ])
   })
 
-  it('refuses to place on an already-occupied segment, speaks why, and keeps the part chosen', () => {
+  it('moves onto an already-occupied segment, names the part there, keeps the part chosen, and does not place', () => {
     let state = choosePart(createInitialState(), 'wire')
     state = sparshReducer(state, { type: 'SWIPE', direction: 'right' }).state // wire (0,0)->(0,1); stays chosen
     const { state: refused, effects } = sparshReducer(state, { type: 'SWIPE', direction: 'left' })
     // cursor is now at (0,1); swiping left targets the same segment (0,1)-(0,0) again
     expect(refused.buildSub).toEqual({ kind: 'partChosen', partType: 'wire' })
     expect(refused.netlist.components).toHaveLength(1)
+    expect(refused.netlist).toBe(state.netlist) // unchanged, not a new object
+    expect(refused.cursor).toEqual({ row: 0, col: 0 }) // cursor moved anyway
     expect(effects).toEqual([
       { type: 'haptic', name: 'invalid' },
       { type: 'delay', ms: 190 },
-      { type: 'speak', clips: ['segment_occupied'] },
+      { type: 'speak', clips: ['already_wire'] },
     ])
   })
 })

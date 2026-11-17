@@ -22,6 +22,11 @@ export const CLIPS = {
   removed: 'Removed',
   cancelled: 'Cancelled.',
   segment_occupied: "There's already something there.",
+  already_wire: 'Wire already placed here.',
+  already_bulb: 'Bulb already placed here.',
+  already_resistor: 'Resistor already placed here.',
+  already_switch: 'Switch already placed here.',
+  already_battery: 'Battery already placed here.',
   switch_open: 'Switch open.',
   switch_closed: 'Switch closed.',
   your_circuit_has: 'Your circuit has',
@@ -127,6 +132,11 @@ const CLIPS_KN: Partial<Record<ClipName, string>> = {
   run_starting: 'ಸರಿ, ಸರ್ಕ್ಯೂಟ್ ಚಾಲನೆ ಮಾಡುತ್ತಿದ್ದೇನೆ.',
   ohms_5: 'ಐದು ಓಮ್', ohms_10: 'ಹತ್ತು ಓಮ್', ohms_20: 'ಇಪ್ಪತ್ತು ಓಮ್', ohms_50: 'ಐವತ್ತು ಓಮ್', ohms_100: 'ನೂರು ಓಮ್',
   volts_1_5: 'ಒಂದೂವರೆ ವೋಲ್ಟ್', volts_3: 'ಮೂರು ವೋಲ್ಟ್', volts_4_5: 'ನಾಲ್ಕೂವರೆ ವೋಲ್ಟ್', volts_6: 'ಆರು ವೋಲ್ಟ್', volts_9: 'ಒಂಬತ್ತು ವೋಲ್ಟ್',
+  already_wire: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ತಂತಿ ಇದೆ.',
+  already_bulb: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಬಲ್ಬ್ ಇದೆ.',
+  already_resistor: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ರೋಧಕ ಇದೆ.',
+  already_switch: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಸ್ವಿಚ್ ಇದೆ.',
+  already_battery: 'ಆ ಜಾಗದಲ್ಲಿ ಈಗಾಗಲೇ ಬ್ಯಾಟರಿ ಇದೆ.',
 }
 
 export function fallbackFor(name: ClipName, lang: 'en' | 'kn' = 'en'): string {
@@ -147,6 +157,12 @@ export function countClipFor(count: number): ClipName | null {
 
 export function partClipFor(type: ComponentType): ClipName {
   return type
+}
+
+// Spoken when a swipe-to-place targets a segment that already has a part on it — names which
+// part is there instead of the old generic segment_occupied message.
+export function alreadyClipFor(type: ComponentType): ClipName {
+  return `already_${type}` as ClipName
 }
 
 // The two-finger-tap value-cycling gesture's fixed value lists — the same preset values Build

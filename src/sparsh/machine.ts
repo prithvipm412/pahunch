@@ -4,6 +4,7 @@ import { DEFAULT_BATTERY_VOLTAGE, DEFAULT_RESISTOR_RESISTANCE } from '../physics
 import { classifyCircuitStatus, type CircuitStatus } from '../audio/feedbackSounds'
 import { hapticDurationMs, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
 import {
+  alreadyClipFor,
   BATTERY_VALUES,
   countClipFor,
   ohmsClipFor,
@@ -271,8 +272,10 @@ function findLatestComponentAt(netlist: Netlist, point: GridPoint): CircuitCompo
   return undefined
 }
 
-function segmentOccupied(netlist: Netlist, a: GridPoint, b: GridPoint): boolean {
-  return netlist.components.some(
+// The component already occupying segment a-b, if any — used by handlePlacement to both check
+// occupancy and name which part is in the way.
+function findSegmentComponent(netlist: Netlist, a: GridPoint, b: GridPoint): CircuitComponent | undefined {
+  return netlist.components.find(
     (c) => (pointsEqual(c.from, a) && pointsEqual(c.to, b)) || (pointsEqual(c.from, b) && pointsEqual(c.to, a)),
   )
 }
@@ -396,8 +399,10 @@ function handlePlacement(state: SparshState, partType: ComponentType, direction:
   if (!neighbor) {
     return { state, effects: hapticThenSpeak('invalid', ['edge']) }
   }
-  if (segmentOccupied(netlist, cursor, neighbor)) {
-    return { state, effects: hapticThenSpeak('invalid', ['segment_occupied']) }
+  const occupant = findSegmentComponent(netlist, cursor, neighbor)
+  if (occupant) {
+    // Move the cursor there anyway, instead of staying stuck, and name exactly what's in the way.
+    return { state: { ...state, cursor: neighbor }, effects: hapticThenSpeak('invalid', [alreadyClipFor(occupant.type)]) }
   }
 
   const component: CircuitComponent = {
