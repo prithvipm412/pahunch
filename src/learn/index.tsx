@@ -9,12 +9,18 @@
  * Fault Hunt:
  *  - 3 puzzles from puzzles.ts.
  *  - Tap the broken component → correct (fix + solve) or wrong (try again, hint after 2).
+ *
+ * Level Goal-Checks:
+ *  - Uses describeCircuit() (topology + counts) and SolveResult (component states + errors) from src/physics
+ *  - Gracefully stops audio using stopAll() from src/audio
  */
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import type { Netlist, SolveResult } from '../contracts/netlist'
 import { solve } from '../physics'
-import { playClip, playSequence } from '../audio'
+import { describeCircuit } from '../physics/describe'
+// TODO: Codex (L2) is refining stopAll() in src/audio; calling existing stopAll() from src/audio
+import { playClip, playSequence, stopAll } from '../audio'
 import { useLanguage } from '../app/lang'
 import { useLearnStrings } from './useLearnStrings'
 import GlowCircuitSVG from './GlowCircuitSVG'
@@ -76,23 +82,29 @@ const PRESET_CHALLENGES: Array<{ key: string; netlist: Netlist }> = [
   },
 ]
 
-type PredictOption = 'both_bright' | 'both_dim' | 'one_each' | 'both_off'
+export type PredictOption = 'both_bright' | 'both_dim' | 'one_each' | 'both_off'
 
-/** Map a SolveResult → the best-matching PredictOption. */
-function gradeResult(result: SolveResult): PredictOption {
-  const bulbs = result.components.filter((c) =>
-    // We don't have type info in SolveResult, but we keyed bulbs with 'bulb' prefix.
-    c.id.startsWith('bulb'),
+/**
+ * Evaluates circuit outcome using both SolveResult and describeCircuit() structure.
+ */
+export function gradeResult(result: SolveResult, netlist: Netlist): PredictOption {
+  const desc = describeCircuit(netlist)
+  const bulbIds = new Set(
+    netlist.components.filter((c) => c.type === 'bulb').map((c) => c.id),
   )
-  if (bulbs.length === 0) return 'both_off'
-  if (!result.ok || bulbs.every((b) => b.state === 'off')) return 'both_off'
+  const bulbs = result.components.filter((c) => bulbIds.has(c.id))
+
+  if (bulbs.length === 0 || desc.topology === 'empty') return 'both_off'
+  if (!result.ok || desc.topology === 'incomplete' || bulbs.every((b) => b.state === 'off')) {
+    return 'both_off'
+  }
   if (bulbs.length === 1) {
     const s = bulbs[0].state
     if (s === 'bright' || s === 'normal') return 'both_bright'
     if (s === 'dim') return 'both_dim'
     return 'both_off'
   }
-  // Two bulbs
+  // Two or more bulbs
   const states = bulbs.map((b) => b.state)
   const allOff = states.every((s) => s === 'off')
   if (allOff) return 'both_off'
@@ -103,19 +115,96 @@ function gradeResult(result: SolveResult): PredictOption {
   return 'one_each'
 }
 
-/** Map challenge key → explanation clip + try clip. */
-function challengeAudio(key: string): { explain: string; explainText: string; try: string; tryText: string } {
-  switch (key) {
-    case 'series':
-      return { explain: 'explain_series', explainText: 'In series, they share voltage and glow dim.', try: 'try_parallel', tryText: 'Try connecting bulbs in parallel instead.' }
-    case 'parallel':
-      return { explain: 'explain_parallel', explainText: 'In parallel, each bulb gets full voltage.', try: 'try_series', tryText: 'Try connecting bulbs in series instead.' }
-    case 'switch':
-      return { explain: 'explain_open', explainText: 'The open switch breaks the circuit.', try: 'try_switch', tryText: 'Try closing the switch to complete the circuit.' }
-    case 'resistor':
-      return { explain: 'explain_resistor', explainText: 'The resistor limits current, so the bulb is dim.', try: 'try_series', tryText: 'Try connecting bulbs in series instead.' }
-    default:
-      return { explain: 'explain_series', explainText: 'In series, they share voltage and glow dim.', try: 'try_parallel', tryText: 'Try connecting bulbs in parallel instead.' }
+/**
+ * Determines appropriate explanation & follow-up suggestion based on challenge key
+ * or dynamic structural analysis via describeCircuit().
+ */
+export function challengeAudio(
+  key: string,
+  netlist: Netlist,
+  result: SolveResult,
+): { explain: string; explainText: string; try: string; tryText: string } {
+  const desc = describeCircuit(netlist)
+
+  if (key === 'series') {
+    return {
+      explain: 'explain_series',
+      explainText: 'In series, they share voltage and glow dim.',
+      try: 'try_parallel',
+      tryText: 'Try connecting bulbs in parallel instead.',
+    }
+  }
+  if (key === 'parallel') {
+    return {
+      explain: 'explain_parallel',
+      explainText: 'In parallel, each bulb gets full voltage.',
+      try: 'try_series',
+      tryText: 'Try connecting bulbs in series instead.',
+    }
+  }
+  if (key === 'switch') {
+    return {
+      explain: 'explain_open',
+      explainText: 'The open switch breaks the circuit.',
+      try: 'try_switch',
+      tryText: 'Try closing the switch to complete the circuit.',
+    }
+  }
+  if (key === 'resistor') {
+    return {
+      explain: 'explain_resistor',
+      explainText: 'The resistor limits current, so the bulb is dim.',
+      try: 'try_series',
+      tryText: 'Try connecting bulbs in series instead.',
+    }
+  }
+
+  // Dynamic analysis for custom or user-built circuits
+  if (result.errors.includes('short_circuit')) {
+    return {
+      explain: 'explain_short',
+      explainText: 'A wire directly across the battery is a short circuit — dangerous!',
+      try: 'try_series',
+      tryText: 'Connect bulbs in series or parallel across the battery.',
+    }
+  }
+  if (desc.topology === 'incomplete' || !result.ok) {
+    if (desc.counts.switch > 0) {
+      return {
+        explain: 'explain_open',
+        explainText: 'The open switch breaks the circuit.',
+        try: 'try_switch',
+        tryText: 'Try closing the switch to complete the circuit.',
+      }
+    }
+    return {
+      explain: 'explain_open',
+      explainText: 'The circuit is incomplete — no complete loop back to the battery.',
+      try: 'try_series',
+      tryText: 'Try connecting a complete closed loop.',
+    }
+  }
+  if (desc.topology === 'parallel') {
+    return {
+      explain: 'explain_parallel',
+      explainText: 'In parallel, each bulb gets full voltage.',
+      try: 'try_series',
+      tryText: 'Try connecting bulbs in series instead.',
+    }
+  }
+  if (desc.counts.resistor > 0) {
+    return {
+      explain: 'explain_resistor',
+      explainText: 'The resistor limits current, so the bulb is dim.',
+      try: 'try_parallel',
+      tryText: 'Try connecting bulbs in parallel instead.',
+    }
+  }
+  return {
+    explain: 'explain_series',
+    explainText: 'In series, they share voltage and glow dim.',
+    try: 'try_parallel',
+    tryText: 'Try connecting bulbs in parallel instead.',
   }
 }
 
@@ -141,6 +230,18 @@ export default function LearnScreen() {
   const routeState = location.state as { netlist?: Netlist; mode?: string } | null
   const externalNetlist = routeState?.mode === 'predict' ? routeState.netlist : undefined
 
+  // Stop any active audio clips when leaving the Learn screen
+  useEffect(() => {
+    return () => {
+      stopAll()
+    }
+  }, [])
+
+  const handleTabChange = useCallback((nextTab: 'predict' | 'fault') => {
+    stopAll()
+    setTab(nextTab)
+  }, [])
+
   return (
     <>
       <style>{STYLES}</style>
@@ -156,7 +257,7 @@ export default function LearnScreen() {
             role="tab"
             aria-selected={tab === 'predict'}
             className={`tab-btn ${tab === 'predict' ? 'tab-active' : ''}`}
-            onClick={() => setTab('predict')}
+            onClick={() => handleTabChange('predict')}
           >
             {s.tab_predict}
           </button>
@@ -164,7 +265,7 @@ export default function LearnScreen() {
             role="tab"
             aria-selected={tab === 'fault'}
             className={`tab-btn ${tab === 'fault' ? 'tab-active' : ''}`}
-            onClick={() => setTab('fault')}
+            onClick={() => handleTabChange('fault')}
           >
             {s.tab_fault}
           </button>
@@ -218,6 +319,7 @@ function PredictTab({ lang, s, externalNetlist, navigate }: PredictTabProps) {
   }, [phase.kind, lang, s.predict_question])
 
   const startChallenge = useCallback((key: string, netlist: Netlist) => {
+    stopAll()
     audioQueued.current = false
     setPhase({ kind: 'question', challengeKey: key, netlist })
   }, [])
@@ -225,7 +327,7 @@ function PredictTab({ lang, s, externalNetlist, navigate }: PredictTabProps) {
   const handleChoose = useCallback(
     async (chosen: PredictOption, challengeKey: string, netlist: Netlist) => {
       const result = solve(netlist)
-      const actual = gradeResult(result)
+      const actual = gradeResult(result, netlist)
       const correct = chosen === actual
 
       setScore((prev) => ({
@@ -235,7 +337,7 @@ function PredictTab({ lang, s, externalNetlist, navigate }: PredictTabProps) {
 
       setPhase({ kind: 'revealed', challengeKey, netlist, result, chosen, correct })
 
-      const audio = challengeAudio(challengeKey)
+      const audio = challengeAudio(challengeKey, netlist, result)
       await playSequence(lang, [
         correct ? 'correct' : 'not_quite',
         audio.explain,
@@ -246,6 +348,7 @@ function PredictTab({ lang, s, externalNetlist, navigate }: PredictTabProps) {
   )
 
   const tryAnother = useCallback(() => {
+    stopAll()
     audioQueued.current = false
     setPhase({ kind: 'choose' })
   }, [])
@@ -330,7 +433,7 @@ interface RevealedViewProps {
 }
 
 function RevealedView({ phase, s, optionLabels, onTryAnother, onOpenBuild }: RevealedViewProps) {
-  const audio = challengeAudio(phase.challengeKey)
+  const audio = challengeAudio(phase.challengeKey, phase.netlist, phase.result)
   const explanationKey = `explain_${phase.challengeKey}` as keyof LearnStr
   const explanationText = (s[explanationKey] as string | undefined) ?? audio.explainText
 
@@ -399,17 +502,23 @@ function FaultTab({ lang, s }: FaultTabProps) {
       const isCorrect = componentId === puzzle.faultyId
 
       if (isCorrect) {
-        // Apply the fix and run solve
+        // Goal check: run solve() and describeCircuit() on the fixed netlist
         const fixedResult = solve(puzzle.fixedNetlist)
-        setState((prev) => ({
-          ...prev,
-          phase: 'correct',
-          fixedNetlist: puzzle.fixedNetlist,
-          fixedResult,
-          lastTapped: componentId,
-        }))
-        await playSequence(lang, ['fault_correct', 'fault_fixed'], (name) => name === 'fault_correct' ? s.fault_correct : s.fault_fixed)
-        setState((prev) => ({ ...prev, phase: 'fixed' }))
+        const fixedDesc = describeCircuit(puzzle.fixedNetlist)
+        const isGoalMet =
+          fixedResult.ok && fixedDesc.topology !== 'incomplete' && fixedDesc.topology !== 'empty'
+
+        if (isGoalMet) {
+          setState((prev) => ({
+            ...prev,
+            phase: 'correct',
+            fixedNetlist: puzzle.fixedNetlist,
+            fixedResult,
+            lastTapped: componentId,
+          }))
+          await playSequence(lang, ['fault_correct', 'fault_fixed'], (name) => name === 'fault_correct' ? s.fault_correct : s.fault_fixed)
+          setState((prev) => ({ ...prev, phase: 'fixed' }))
+        }
       } else {
         const newWrong = state.wrongTries + 1
         setState((prev) => ({ ...prev, wrongTries: newWrong, lastTapped: componentId }))
@@ -421,6 +530,7 @@ function FaultTab({ lang, s }: FaultTabProps) {
   )
 
   const nextPuzzle = useCallback(() => {
+    stopAll()
     introPlayed.current = false
     setState({
       puzzleIndex: (state.puzzleIndex + 1) % FAULT_PUZZLES.length,
