@@ -4,34 +4,33 @@ import type { CircuitComponent, ComponentResult, ComponentType, GridPoint, Netli
 import { solve } from '../physics'
 import { playClip, sonify, stopAll, stopSonify } from '../audio'
 import { haptic, hapticDurationMs, hapticForCircuitStatus, type HapticName } from '../audio/haptics'
-import { classifyCircuitStatus, playCircuitStatusSound } from '../audio/feedbackSounds'
+import { alarm, classifyCircuitStatus, playCircuitStatusSound } from '../audio/feedbackSounds'
 import { RUN_STARTING_TEXT } from '../audio/runSequence'
 import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
 import './build.css'
 import { removeSelectedBuildPart, selectBuildPart, undoBuildAction, type BuildEditorState } from './editorState'
 import { middlePartSegment, resolveBuildTapTarget, type TapDot, type PartHitSegment } from './tapTarget'
+import { createBuildComponent } from './componentFactory'
 import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
 
 const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
   wire: 'place_wire', battery: 'place_battery', bulb: 'place_bulb', resistor: 'place_resistor', switch: 'place_switch',
-  // Not placeable from the tray yet (see `parts` below) — kept only so this Record stays total
-  // now that ComponentType has grown. Reused by physical analogy: ammeter/fuse are wire-like
-  // when intact, voltmeter is a high-resistance finite component, closer to a resistor.
-  ammeter: 'place_wire', fuse: 'place_wire', voltmeter: 'place_resistor',
+  ammeter: 'place_ammeter' as HapticName, voltmeter: 'place_voltmeter' as HapticName, fuse: 'place_fuse' as HapticName,
 }
 
 const parts: { type: ComponentType; key: TranslationKey; icon: string }[] = [
   { type: 'battery', key: 'battery', icon: '▤' }, { type: 'bulb', key: 'bulb', icon: '◉' },
   { type: 'resistor', key: 'resistor', icon: '⌁' }, { type: 'switch', key: 'switch', icon: '⌑' }, { type: 'wire', key: 'wire', icon: '—' },
+  { type: 'ammeter', key: 'ammeter', icon: 'A' }, { type: 'voltmeter', key: 'voltmeter', icon: 'V' }, { type: 'fuse', key: 'fuse', icon: '▱' },
 ]
 const initialNetlist: Netlist = { gridSize: 5, components: [], source: 'build' }
 const xAt = (point: GridPoint) => 34 + point.col * 73
 const yAt = (point: GridPoint) => 34 + point.row * 73
 const isVertical = (component: CircuitComponent) => component.from.col === component.to.col
-const labelFor = (component: CircuitComponent, translate: (key: TranslationKey) => string) => component.type === 'battery' ? `${component.value ?? 3} V` : component.type === 'resistor' ? `${component.value ?? 10} Ω` : component.type === 'switch' ? (component.closed === false ? translate('open') : translate('closed')) : translate(component.type)
-const formatValue = (value: number) => Number.isInteger(value) ? String(value) : value.toFixed(1)
-const componentValueLabel = (component: CircuitComponent) => component.type === 'battery' ? `${formatValue(component.value ?? 3)} V` : component.type === 'resistor' || component.type === 'bulb' ? `${formatValue(component.value ?? 10)} Ω` : null
+const labelFor = (component: CircuitComponent, translate: (key: TranslationKey) => string) => component.type === 'battery' ? `${component.value ?? 3} V` : component.type === 'resistor' ? `${component.value ?? 10} Ω` : component.type === 'fuse' ? `${component.value ?? .5} A` : component.type === 'switch' ? (component.closed === false ? translate('open') : translate('closed')) : translate(component.type)
+const formatValue = (value: number) => String(value)
+const componentValueLabel = (component: CircuitComponent) => component.type === 'battery' ? `${formatValue(component.value ?? 3)} V` : component.type === 'resistor' || component.type === 'bulb' ? `${formatValue(component.value ?? 10)} Ω` : component.type === 'fuse' ? `${formatValue(component.value ?? .5)} A` : null
 const samePath = (first: readonly GridPoint[], second: readonly GridPoint[]) => first.length === second.length && first.every((point, index) => point.row === second[index].row && point.col === second[index].col)
 
 interface WireDrag {
@@ -63,8 +62,16 @@ function SymbolGraphic({ component, result, selected, onPointerDown, translate, 
   const current = Math.abs(result?.current ?? 0)
   const duration = Math.max(.22, Math.min(1.8, 1.8 / (1 + current)))
   const hit = middlePartSegment(component.id, { x: x1, y: y1 }, { x: x2, y: y2 })
-  return <g className={`${selected ? 'selected-part' : ''} ${glow} ${ghost ? `move-ghost move-ghost-${ghost}` : ''}`} onPointerDown={onPointerDown} pointerEvents={interactive ? 'auto' : 'none'} role="button" tabIndex={interactive ? 0 : -1} aria-label={`${translate(component.type)}, ${labelFor(component, translate)}`}>
-    <line x1={x1} y1={y1} x2={x2} y2={y2} className="part-line" />
+  const fuseBlown = component.type === 'fuse' && result?.state === 'blown'
+  const meterValue = component.type === 'ammeter' ? Math.abs(result?.current ?? 0) : component.type === 'voltmeter' ? Math.abs(result?.voltage ?? 0) : null
+  const badgeX = vertical ? cx + (component.from.col === 4 ? -radius - 38 : radius + 38) : cx
+  const badgeY = vertical ? cy : cy - radius - 23
+  const brokenStart = vertical ? { x: cx, y: cy - 5 } : { x: cx - 5, y: cy }
+  const brokenEnd = vertical ? { x: cx, y: cy + 5 } : { x: cx + 5, y: cy }
+  return <g className={`${selected ? 'selected-part' : ''} ${glow} ${fuseBlown ? 'fuse-blown' : ''} ${ghost ? `move-ghost move-ghost-${ghost}` : ''}`} onPointerDown={onPointerDown} pointerEvents={interactive ? 'auto' : 'none'} role="button" tabIndex={interactive ? 0 : -1} aria-label={`${translate(component.type)}, ${labelFor(component, translate)}`}>
+    {fuseBlown
+      ? <><line x1={x1} y1={y1} x2={brokenStart.x} y2={brokenStart.y} className="part-line fuse-broken-line" /><line x1={brokenEnd.x} y1={brokenEnd.y} x2={x2} y2={y2} className="part-line fuse-broken-line" /></>
+      : <line x1={x1} y1={y1} x2={x2} y2={y2} className="part-line" />}
     {result && current > 0 && <line x1={x1} y1={y1} x2={x2} y2={y2} className="flow-line" style={{ '--flow-duration': `${duration}s` } as CSSProperties} />}
     <g transform={`translate(${cx} ${cy}) rotate(${vertical ? 90 : 0})`}>
       {component.type === 'battery' && <><rect x={-radius - 8} y={-radius} width={(radius + 8) * 2} height={radius * 2} rx="5" className="part-symbol" /><line x1="-5" y1={-radius + 4} x2="-5" y2={radius - 4} stroke="#18345f" strokeWidth="3" /><line x1="5" y1={-radius * .62} x2="5" y2={radius * .62} stroke="#18345f" strokeWidth="3" /></>}
@@ -72,8 +79,11 @@ function SymbolGraphic({ component, result, selected, onPointerDown, translate, 
       {component.type === 'resistor' && <><rect x={-radius - 8} y={-radius * .58} width={(radius + 8) * 2} height={radius * 1.16} rx="4" className="part-symbol" /><polyline points={`${-radius},0 ${-radius * .65},${-radius * .38} ${-radius * .3},${radius * .38} 0,${-radius * .38} ${radius * .3},${radius * .38} ${radius * .65},${-radius * .38} ${radius},0`} fill="none" stroke="#18345f" strokeWidth="2" /></>}
       {component.type === 'switch' && <><rect x={-radius - 8} y={-radius * .58} width={(radius + 8) * 2} height={radius * 1.16} rx="4" className="part-symbol" /><circle cx={-radius * .68} cy="0" r="3.5" fill="#18345f" /><circle cx={radius * .68} cy="0" r="3.5" fill="#18345f" /><line x1={-radius * .62} y1="0" x2={component.closed === false ? radius * .35 : radius * .62} y2={component.closed === false ? -radius * .52 : 0} stroke="#18345f" strokeWidth="2.5" /><text x="0" y={radius + 14} className="part-text">{component.closed === false ? translate('open') : translate('closed')}</text></>}
       {component.type === 'wire' && <><circle r="7" className="part-symbol" /><text x="0" y="1" className="part-text">·</text></>}
+      {(component.type === 'ammeter' || component.type === 'voltmeter') && <><circle r={radius} className="part-symbol" /><text x="0" y="1" className="part-text meter-symbol-text">{component.type === 'ammeter' ? 'A' : 'V'}</text></>}
+      {component.type === 'fuse' && <><rect x={-radius - 8} y={-radius * .58} width={(radius + 8) * 2} height={radius * 1.16} rx="3" className="part-symbol fuse-symbol" />{fuseBlown ? <><line x1={-radius} y1="0" x2="-4" y2="0" className="fuse-inner-line fuse-broken-line" /><line x1="4" y1="0" x2={radius} y2="0" className="fuse-inner-line fuse-broken-line" /></> : <line x1={-radius} y1="0" x2={radius} y2="0" className="fuse-inner-line" />}{fuseBlown && <text x="0" y={radius + 14} className="part-text fuse-label">{translate('blown')}</text>}</>}
     </g>
     {componentValueLabel(component) && <text x={cx + (vertical ? (component.from.col === 4 ? -radius - 16 : radius + 16) : 0)} y={cy + (vertical ? 4 : -radius - 8)} className="part-value-label">{componentValueLabel(component)}</text>}
+    {meterValue !== null && result && <g className="meter-reading" transform={`translate(${badgeX} ${badgeY})`}><rect x="-32" y="-12" width="64" height="24" rx="12" /><text y="1">{meterValue.toFixed(2)} {component.type === 'ammeter' ? 'A' : 'V'}</text></g>}
     <line x1={hit.from.x} y1={hit.from.y} x2={hit.to.x} y2={hit.to.y} stroke="transparent" strokeWidth="20" strokeLinecap="butt" pointerEvents="stroke" className="part-hit-area" />
   </g>
 }
@@ -135,7 +145,7 @@ export default function BuildScreen() {
         haptic('invalid'); setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
       }
     }
-    const newComponent: CircuitComponent = { id: `build-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, type, from, to, ...((type === 'battery' || type === 'bulb' || type === 'resistor') ? { value: type === 'battery' ? 3 : 10 } : {}), ...(type === 'switch' ? { closed: true } : {}) }
+    const newComponent = createBuildComponent(type, `build-${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, from, to)
     if (type !== 'wire' && netlist.components.some((component) => componentsOverlap(newComponent, component))) {
       haptic('invalid'); setNotice(translate('hintOccupiedWire')); setFirstPoint(null); return
     }
@@ -367,9 +377,16 @@ export default function BuildScreen() {
     }
     await playClip(lang, 'run_starting', RUN_STARTING_TEXT[lang])
     const status = classifyCircuitStatus(next)
-    haptic(hapticForCircuitStatus(status), { essential: true })
-    playCircuitStatusSound(status)
-    await new Promise<void>((resolveDelay) => { setTimeout(resolveDelay, hapticDurationMs(hapticForCircuitStatus(status)) + 60) })
+    const hasBlownFuse = next.components.some((component) => component.state === 'blown')
+    const statusHaptic = hasBlownFuse ? 'circuit_broken' : hapticForCircuitStatus(status)
+    if (hasBlownFuse) {
+      haptic(statusHaptic, { essential: true })
+      alarm()
+    } else {
+      haptic(statusHaptic, { essential: true })
+      playCircuitStatusSound(status)
+    }
+    await new Promise<void>((resolveDelay) => { setTimeout(resolveDelay, Math.max(hapticDurationMs(statusHaptic), hasBlownFuse ? 850 : 0) + 60) })
     await playClip(lang, next.ok ? 'build_run_ok' : 'build_run_error', next.ok ? translate('resultsUpdated') : friendlyErrorTextFor(next))
     sonify(next)
   }
@@ -384,6 +401,13 @@ export default function BuildScreen() {
     if (next === editorState()) return
     haptic('undo')
     setNetlist(next.netlist); setUndoStack(next.undoStack); setSelectedId(next.selectedId); setResult(null); stopSonify(); setNotice(translate('hintStart'))
+  }
+
+  function replaceSelectedFuse() {
+    if (selected?.type !== 'fuse' || resultMap.get(selected.id)?.state !== 'blown') return
+    setResult(null)
+    stopSonify()
+    setNotice(translate('fuseReplaced'))
   }
 
   return <main className="builder">
@@ -410,7 +434,9 @@ export default function BuildScreen() {
       {selected.type === 'battery' && <div className="preset-row">{[1.5, 3, 4.5, 6, 9].map((value) => <button key={value} aria-pressed={(selected.value ?? 3) === value} onClick={() => updateSelected({ value })}>{formatValue(value)} V</button>)}</div>}
       {selected.type === 'resistor' && <div className="preset-row">{[5, 10, 20, 50, 100].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
       {selected.type === 'bulb' && <div className="preset-row">{[5, 10, 20].map((value) => <button key={value} aria-pressed={(selected.value ?? 10) === value} onClick={() => updateSelected({ value })}>{value} Ω</button>)}</div>}
+      {selected.type === 'fuse' && <div className="preset-row">{[.25, .5, 1, 2].map((value) => <button key={value} aria-pressed={(selected.value ?? .5) === value} onClick={() => updateSelected({ value })}>{value} A</button>)}</div>}
       {selected.type === 'switch' && <div className="preset-row"><button aria-pressed={selected.closed !== false} onClick={() => updateSelected({ closed: true })}>{translate('closed')}</button><button aria-pressed={selected.closed === false} onClick={() => updateSelected({ closed: false })}>{translate('open')}</button></div>}
+      {selected.type === 'fuse' && resultMap.get(selected.id)?.state === 'blown' && <button className="replace-fuse" onClick={replaceSelectedFuse}>{translate('replaceFuse')}</button>}
       {resultMap.has(selected.id) && <span className="selected-readout">{translate('voltage')}: {resultMap.get(selected.id)!.voltage.toFixed(2)} V · {translate('current')}: {resultMap.get(selected.id)!.current.toFixed(3)} A · {translate('power')}: {resultMap.get(selected.id)!.power.toFixed(3)} W</span>}
     </section>}
     {result && <section className="result-panel" aria-live="polite" aria-label={translate('runResults')}>

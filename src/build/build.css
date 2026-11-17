@@ -22,6 +22,7 @@
 }
 .selection-bar .preset-row { gap: 8px; }
 .selection-bar .preset-row button { min-height: 50px; min-width: 62px; font-size: 16px; }
+.selection-bar .replace-fuse { display: block; min-height: 50px; margin: 10px auto 0; padding: 8px 18px; border: 2px solid var(--orange); border-radius: 999px; background: var(--orange); color: var(--ink); font-size: 16px; font-weight: 800; cursor: pointer; }
 .selection-bar .selected-readout { margin-top: 10px; font-size: 14px; }
 .selected-part { filter: drop-shadow(0 0 5px var(--orange)); }
 .part-hit-area { stroke: transparent; }
@@ -37,6 +38,15 @@
 .bulb-bright .bulb-core { fill: #fff176; }
 .bulb-dim .bulb-core { fill: #ffb74d; }
 .bulb-overload .bulb-core { fill: #ff4545; }
+.meter-symbol-text { font-size: 20px; }
+.meter-reading { pointer-events: none; }
+.meter-reading rect { fill: var(--cream); stroke: var(--orange); stroke-width: 2; }
+.meter-reading text { fill: var(--ink); font-size: 12px; font-weight: 800; text-anchor: middle; dominant-baseline: central; }
+.fuse-inner-line { stroke: var(--ink); stroke-width: 2.6; }
+.fuse-blown .part-line, .fuse-broken-line { stroke: #ef3b32 !important; }
+.fuse-blown .fuse-symbol { fill: #ffd7d2; stroke: #ef3b32; }
+.fuse-broken-line { stroke-width: 3; }
+.fuse-label { fill: #ef3b32; font-size: 12px; }
 @keyframes bulb-breathe { 0%, 100% { opacity: .58; } 50% { opacity: .82; } }
 @keyframes selection-enter { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
 @media (prefers-reduced-motion: reduce) {
