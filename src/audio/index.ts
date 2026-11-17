@@ -5,6 +5,22 @@ let context: AudioContext | null = null
 let oscillator: OscillatorNode | null = null
 let gain: GainNode | null = null
 
+function getAudioContext(): AudioContext | null {
+  if (typeof window === 'undefined') return null
+  const AudioContextConstructor = window.AudioContext
+  if (!AudioContextConstructor) return null
+  context ??= new AudioContextConstructor()
+  return context
+}
+
+/** Creates and resumes the shared audio context after a user gesture. */
+export async function unlockAudio(): Promise<void> {
+  try {
+    const audioContext = getAudioContext()
+    if (audioContext?.state === 'suspended') await audioContext.resume()
+  } catch { /* Audio can remain unavailable when the browser blocks it. */ }
+}
+
 /** Plays a named language clip, with optional spoken fallback text. */
 export async function playClip(lang: 'en' | 'kn', name: string, fallbackText?: string): Promise<void> {
   stopClipPlayers()
@@ -46,21 +62,20 @@ export function sonify(result: SolveResult): void {
   const totalPower = result.components.reduce((sum, component) => sum + Math.max(0, component.power), 0)
   const totalCurrent = result.components.reduce((sum, component) => sum + Math.abs(component.current), 0)
   try {
-    const AudioContextConstructor = window.AudioContext
-    if (!AudioContextConstructor) return
-    context ??= new AudioContextConstructor()
+    const audioContext = getAudioContext()
+    if (!audioContext) return
     if (!oscillator || !gain) {
-      oscillator = context.createOscillator()
-      gain = context.createGain()
+      oscillator = audioContext.createOscillator()
+      gain = audioContext.createGain()
       oscillator.type = 'sine'
       oscillator.connect(gain)
-      gain.connect(context.destination)
+      gain.connect(audioContext.destination)
       oscillator.start()
     }
-    const now = context.currentTime
+    const now = audioContext.currentTime
     oscillator.frequency.setTargetAtTime(180 + Math.min(totalCurrent, 3) * 180, now, 0.12)
     gain.gain.setTargetAtTime(Math.min(0.16, 0.018 + Math.sqrt(totalPower) * 0.025), now, 0.16)
-    void context.resume()
+    if (audioContext.state === 'suspended') void audioContext.resume()
   } catch { stopSonify() }
 }
 

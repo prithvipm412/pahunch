@@ -10,6 +10,8 @@ export default defineConfig({
       registerType: 'autoUpdate',
       workbox: {
         globPatterns: ['**/*.{js,css,html,json,svg,png,mp3}'],
+        navigateFallback: '/index.html',
+        navigateFallbackDenylist: [/^\/api\//],
       },
       manifest: {
         name: 'Pahunch',
