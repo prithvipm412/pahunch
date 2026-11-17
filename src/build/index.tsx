@@ -10,6 +10,7 @@ import { useLanguage, useT } from '../app/lang'
 import { tWith, type TranslationKey } from '../app/i18n'
 import './build.css'
 import { removeSelectedBuildPart, selectBuildPart, undoBuildAction, type BuildEditorState } from './editorState'
+import { middlePartSegment, resolveBuildTapTarget, type TapDot, type PartHitSegment } from './tapTarget'
 import { componentsOverlap, extendWireDragPath, wireSegmentsForDragPath } from './wirePath'
 
 const PLACE_HAPTIC: Record<ComponentType, HapticName> = {
@@ -48,7 +49,7 @@ interface PartDrag {
   moved: boolean
 }
 
-function SymbolGraphic({ component, result, selected, onClick, onPointerDown, translate, interactive, ghost }: { component: CircuitComponent; result?: ComponentResult; selected: boolean; onClick: () => void; onPointerDown?: (event: ReactPointerEvent<SVGGElement>) => void; translate: (key: TranslationKey) => string; interactive: boolean; ghost?: 'valid' | 'invalid' }) {
+function SymbolGraphic({ component, result, selected, onPointerDown, translate, interactive, ghost }: { component: CircuitComponent; result?: ComponentResult; selected: boolean; onPointerDown?: (event: ReactPointerEvent<SVGGElement>) => void; translate: (key: TranslationKey) => string; interactive: boolean; ghost?: 'valid' | 'invalid' }) {
   const x1 = xAt(component.from), y1 = yAt(component.from), x2 = xAt(component.to), y2 = yAt(component.to)
   const vertical = isVertical(component)
   const cx = (x1 + x2) / 2, cy = (y1 + y2) / 2
@@ -57,7 +58,8 @@ function SymbolGraphic({ component, result, selected, onClick, onPointerDown, tr
   const glow = component.type === 'bulb' ? `bulb-${result?.state ?? 'off'}` : ''
   const current = Math.abs(result?.current ?? 0)
   const duration = Math.max(.22, Math.min(1.8, 1.8 / (1 + current)))
-  return <g className={`${selected ? 'selected-part' : ''} ${glow} ${ghost ? `move-ghost move-ghost-${ghost}` : ''}`} onPointerDown={onPointerDown} onClick={(event) => { if (interactive) { event.stopPropagation(); onClick() } }} pointerEvents={interactive ? 'auto' : 'none'} role="button" tabIndex={interactive ? 0 : -1} aria-label={`${translate(component.type)}, ${labelFor(component, translate)}`}>
+  const hit = middlePartSegment(component.id, { x: x1, y: y1 }, { x: x2, y: y2 })
+  return <g className={`${selected ? 'selected-part' : ''} ${glow} ${ghost ? `move-ghost move-ghost-${ghost}` : ''}`} onPointerDown={onPointerDown} pointerEvents={interactive ? 'auto' : 'none'} role="button" tabIndex={interactive ? 0 : -1} aria-label={`${translate(component.type)}, ${labelFor(component, translate)}`}>
     <line x1={x1} y1={y1} x2={x2} y2={y2} className="part-line" />
     {result && current > 0 && <line x1={x1} y1={y1} x2={x2} y2={y2} className="flow-line" style={{ '--flow-duration': `${duration}s` } as CSSProperties} />}
     <g transform={`translate(${cx} ${cy}) rotate(${vertical ? 90 : 0})`}>
@@ -68,9 +70,7 @@ function SymbolGraphic({ component, result, selected, onClick, onPointerDown, tr
       {component.type === 'wire' && <><circle r="7" className="part-symbol" /><text x="0" y="1" className="part-text">·</text></>}
     </g>
     {componentValueLabel(component) && <text x={cx + (vertical ? (component.from.col === 4 ? -radius - 16 : radius + 16) : 0)} y={cy + (vertical ? 4 : -radius - 8)} className="part-value-label">{componentValueLabel(component)}</text>}
-    {component.type === 'wire'
-      ? <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" strokeLinecap="round" pointerEvents="stroke" className="wire-hit-area" />
-      : <rect x={Math.min(x1, x2) - 14} y={Math.min(y1, y2) - 14} width={Math.abs(x2 - x1) + 28} height={Math.abs(y2 - y1) + 28} fill="transparent" />}
+    <line x1={hit.from.x} y1={hit.from.y} x2={hit.to.x} y2={hit.to.y} stroke="transparent" strokeWidth="20" strokeLinecap="butt" pointerEvents="stroke" className="part-hit-area" />
   </g>
 }
 
@@ -306,16 +306,25 @@ export default function BuildScreen() {
       suppressPartClickRef.current = false
       return
     }
-    if (!placing) {
-      if (event.target === event.currentTarget || (event.target as Element).closest?.('.grid-cell')) setSelectedId(null)
-      return
-    }
     if (placing === 'wire' && suppressWireClickRef.current) {
       suppressWireClickRef.current = false
       return
     }
-    const snapped = nearestGridPoint(canvasPoint(event, event.currentTarget))
-    if (snapped) tapDot(snapped.row, snapped.col)
+    const point = canvasPoint(event, event.currentTarget)
+    const dots: TapDot[] = Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => ({ row, col, x: xAt({ row, col }), y: yAt({ row, col }) }))).flat()
+    const segments: PartHitSegment[] = netlist.components.map((component) => middlePartSegment(component.id, { x: xAt(component.from), y: yAt(component.from) }, { x: xAt(component.to), y: yAt(component.to) }))
+    const target = resolveBuildTapTarget(point, dots, segments, placing !== null)
+    if (target.kind === 'dot') {
+      setSelectedId(null)
+      if (placing) tapDot(target.row, target.col)
+      return
+    }
+    if (placing) return
+    if (target.kind === 'part') {
+      setSelectedId(selectBuildPart(editorState(), target.id).selectedId)
+      return
+    }
+    setSelectedId(null)
   }
 
   function updateSelected(changes: Partial<CircuitComponent>) {
@@ -378,10 +387,11 @@ export default function BuildScreen() {
     {loadedNetlist && <p className="loaded-note" role="status">{translate('loadedDrawing')}</p>}
     <div className="builder-card"><svg className={`circuit-svg${placing === 'wire' ? ' wire-active' : ''}`} viewBox="0 0 360 360" role="img" aria-label={translate('gridLabel')} onPointerDown={startWireDrag} onPointerMove={moveWireDrag} onPointerUp={finishWireDrag} onPointerCancel={finishWireDrag} onClick={handleGridClick}>
       <defs>{['off', 'dim', 'normal', 'bright', 'overload'].map((state) => <radialGradient key={state} id={`bulbGlow-${state}`}><stop offset="0" stopColor={state === 'overload' ? '#ff3030' : state === 'dim' ? '#ff9d2e' : '#ffd54a'} stopOpacity=".85" /><stop offset="1" stopColor={state === 'overload' ? '#ff3030' : state === 'dim' ? '#ff9d2e' : '#ffd54a'} stopOpacity="0" /></radialGradient>)}</defs>
-      {Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => <g key={`dot-${row}-${col}`} className="grid-cell" role="button" tabIndex={0} aria-label={`${translate('tapDot')} ${row + 1}, ${col + 1}`} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') tapDot(row, col) }}><rect x={xAt({ row, col }) - 30} y={yAt({ row, col }) - 30} width="60" height="60" fill="transparent" /><circle cx={xAt({ row, col })} cy={yAt({ row, col })} r={firstPoint?.row === row && firstPoint.col === col ? 7 : 5} className="grid-dot" /></g>))}
-      {netlist.components.map((component) => <SymbolGraphic key={component.id} component={component} result={resultMap.get(component.id)} selected={component.id === selectedId} translate={translate} interactive onPointerDown={(event) => beginPartDrag(component, event)} onClick={() => { if (suppressPartClickRef.current) { suppressPartClickRef.current = false; return } setSelectedId(selectBuildPart(editorState(), component.id).selectedId); setPlacing(null) }} />)}
-      {movePreview && <SymbolGraphic component={movePreview.component} selected={false} translate={translate} interactive={false} ghost={movePreview.valid ? 'valid' : 'invalid'} onClick={() => undefined} />}
+      {Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => <g key={`dot-${row}-${col}`} className="grid-cell" role="button" tabIndex={0} aria-label={`${translate('tapDot')} ${row + 1}, ${col + 1}`} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') tapDot(row, col) }} pointerEvents="none"><circle cx={xAt({ row, col })} cy={yAt({ row, col })} r={firstPoint?.row === row && firstPoint.col === col ? 7 : 5} className="grid-dot" /></g>))}
+      {netlist.components.map((component) => <SymbolGraphic key={component.id} component={component} result={resultMap.get(component.id)} selected={component.id === selectedId} translate={translate} interactive={!placing} onPointerDown={(event) => beginPartDrag(component, event)} />)}
+      {movePreview && <SymbolGraphic component={movePreview.component} selected={false} translate={translate} interactive={false} ghost={movePreview.valid ? 'valid' : 'invalid'} />}
       {wirePreview && <line x1={xAt(wirePreview.from)} y1={yAt(wirePreview.from)} x2={wirePreview.to.x} y2={wirePreview.to.y} className="wire-preview" />}
+      {Array.from({ length: 5 }, (_, row) => Array.from({ length: 5 }, (_, col) => <circle key={`dot-hit-${row}-${col}`} className="dot-hit-area" cx={xAt({ row, col })} cy={yAt({ row, col })} r="18" />))}
     </svg></div>
     <p className="builder-hint" aria-live="polite">{notice}</p>
     <section className="tray" aria-label={translate('trayLabel')}>{parts.map((part) => <button key={part.type} aria-pressed={placing === part.type} onClick={() => choosePart(part.type)}><span aria-hidden="true">{part.icon}</span>{translate(part.key)}</button>)}</section>

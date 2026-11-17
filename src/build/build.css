@@ -24,7 +24,8 @@
 .selection-bar .preset-row button { min-height: 50px; min-width: 62px; font-size: 16px; }
 .selection-bar .selected-readout { margin-top: 10px; font-size: 14px; }
 .selected-part { filter: drop-shadow(0 0 5px var(--orange)); }
-.selected-part .wire-hit-area { stroke: transparent; }
+.part-hit-area { stroke: transparent; }
+.dot-hit-area { fill: transparent; pointer-events: all; }
 .bulb-halo { pointer-events: none; stroke: none; }
 .bulb-halo-off { display: none; }
 .bulb-halo-normal { opacity: .7; animation: bulb-breathe 2.5s ease-in-out infinite; }
