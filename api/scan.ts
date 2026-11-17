@@ -129,7 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ error: 'Missing image field (base64 JPEG)' })
   }
 
-  const model = process.env.GEMINI_MODEL ?? 'gemini-2.0-flash'
+  const model = process.env.GEMINI_MODEL ?? 'gemini-3.8-flash'
 
   try {
     const ai = new GoogleGenAI({ apiKey })
@@ -171,6 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const message = err instanceof Error ? err.message : 'Unknown error'
     // Never surface the API key in error messages
     const sanitised = message.replace(apiKey, '[REDACTED]')
-    return res.status(500).json({ error: sanitised })
+    const isRateLimit = /429|resource_exhausted|quota/i.test(message)
+    return res.status(isRateLimit ? 429 : 500).json({ error: sanitised })
   }
 }

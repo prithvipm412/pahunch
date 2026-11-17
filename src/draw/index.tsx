@@ -102,8 +102,20 @@ export default function DrawScreen() {
             message: s.saved_offline,
             blurry: false,
           })
+        } else if (first.reason === 'rate_limit') {
+          setPhase({
+            kind: 'error',
+            previewUrl,
+            message: s.rate_limit_error,
+            blurry: false,
+          })
         } else {
-          setPhase({ kind: 'error', previewUrl, message: first.message, blurry: false })
+          setPhase({
+            kind: 'error',
+            previewUrl,
+            message: s.server_error,
+            blurry: false,
+          })
         }
         return
       }
