@@ -5,7 +5,7 @@ import DrawScreen from './draw'
 import SparshScreen from './sparsh'
 import LearnScreen from './learn'
 import { LanguageProvider, useLanguage, useT } from './app/lang'
-import SpaceBackground from './app/SpaceBackground'
+import CircuitBackground from './app/CircuitBackground'
 import './app/app.css'
 import { stopAll, unlockAudio } from './audio'
 
@@ -33,14 +33,56 @@ function AudioLifecycle() {
   return null
 }
 
+function ResistorIcon() {
+  return (
+    <svg viewBox="0 0 48 24" aria-hidden="true">
+      <path d="M2 12h8l4-10 8 20 8-20 4 10h12" fill="none" stroke="#2f8f88" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function PencilWireIcon() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path d="M8 40l6-16L34 4l6 6-20 20z" fill="none" stroke="#e2672e" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 40l16-4" stroke="#e2672e" strokeWidth="3" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function HandIcon() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <path
+        d="M16 44c-6-2-10-10-10-16V18a3 3 0 0 1 6 0v6M12 24V8a3 3 0 0 1 6 0v12M18 20V6a3 3 0 0 1 6 0v14M24 20V9a3 3 0 0 1 6 0v17l4-3a3 3 0 0 1 4 4l-6 10c-2 4-5 7-9 7h-3z"
+        fill="none"
+        stroke="#f1e6cf"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
+function BulbBrainIcon() {
+  return (
+    <svg viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="24" cy="20" r="13" fill="none" stroke="#e6c79c" strokeWidth="3" />
+      <path d="M18 31h12M20 36h8" stroke="#e6c79c" strokeWidth="3" strokeLinecap="round" />
+      <path d="M17 16c2 5 3 8 7 8s5-3 7-8" stroke="#2f8f88" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  )
+}
+
 function Home() {
   const { lang, setLang } = useLanguage()
   const t = useT()
   const links = [
-    { to: '/build', label: t('build'), icon: '🔌' },
-    { to: '/draw', label: t('draw'), icon: '✏️' },
-    { to: '/sparsh', label: t('sparsh'), icon: '✋' },
-    { to: '/learn', label: t('learn'), icon: '🧠' },
+    { to: '/build', label: t('build'), Icon: ResistorIcon },
+    { to: '/draw', label: t('draw'), Icon: PencilWireIcon },
+    { to: '/sparsh', label: t('sparsh'), Icon: HandIcon },
+    { to: '/learn', label: t('learn'), Icon: BulbBrainIcon },
   ]
   return (
     <main className="home-shell">
@@ -57,15 +99,15 @@ function Home() {
         <h1 className="hero-title">
           Pahunch
           <svg className="hero-bulb" viewBox="0 0 48 48" aria-hidden="true">
-            <circle cx="24" cy="20" r="13" stroke="#ffd866" strokeWidth="2.5" />
-            <path d="M18 31h12M20 36h8M24 33v6" stroke="#ffd866" strokeWidth="2.5" strokeLinecap="round" />
-            <path d="M18 16c2 4 2 8 6 8s4-4 6-8" stroke="#ffe9a8" strokeWidth="1.5" />
+            <circle cx="24" cy="20" r="13" stroke="#e2672e" strokeWidth="2.5" />
+            <path d="M18 31h12M20 36h8M24 33v6" stroke="#e2672e" strokeWidth="2.5" strokeLinecap="round" />
+            <path d="M18 16c2 4 2 8 6 8s4-4 6-8" stroke="#f1e6cf" strokeWidth="1.5" />
           </svg>
         </h1>
         <p className="hero-tagline">{t('welcome')}</p>
       </section>
       <nav className="mode-grid" aria-label={t('homeModes')}>
-        {links.map((item, index) => <Link className="mode-card" to={item.to} key={item.to} style={{ animationDelay: `${index * 70}ms` }}><span className="mode-icon" aria-hidden="true">{item.icon}</span><span>{item.label}</span><span className="mode-arrow" aria-hidden="true">→</span></Link>)}
+        {links.map((item, index) => <Link className="mode-card" to={item.to} key={item.to} style={{ animationDelay: `${index * 70}ms` }}><span className="mode-icon" aria-hidden="true"><item.Icon /></span><span>{item.label}</span><span className="mode-arrow" aria-hidden="true">→</span></Link>)}
       </nav>
       <p className="home-footer">{t('homeFooter')}</p>
     </main>
@@ -73,7 +115,7 @@ function Home() {
 }
 
 function App() {
-  return <LanguageProvider><div className="app-frame" onPointerDownCapture={() => { stopAll(); void unlockAudio() }} onKeyDownCapture={() => { stopAll(); void unlockAudio() }}><BrowserRouter><AudioLifecycle /><SpaceBackground /><div className="app-content"><Routes><Route path="/" element={<Home />} /><Route path="/build" element={<BuildScreen />} /><Route path="/draw" element={<DrawScreen />} /><Route path="/sparsh" element={<SparshScreen />} /><Route path="/learn" element={<LearnScreen />} /></Routes></div></BrowserRouter></div></LanguageProvider>
+  return <LanguageProvider><div className="app-frame" onPointerDownCapture={() => { stopAll(); void unlockAudio() }} onKeyDownCapture={() => { stopAll(); void unlockAudio() }}><BrowserRouter><AudioLifecycle /><CircuitBackground /><div className="app-content"><Routes><Route path="/" element={<Home />} /><Route path="/build" element={<BuildScreen />} /><Route path="/draw" element={<DrawScreen />} /><Route path="/sparsh" element={<SparshScreen />} /><Route path="/learn" element={<LearnScreen />} /></Routes></div></BrowserRouter></div></LanguageProvider>
 }
 
 export default App

@@ -9,15 +9,15 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       workbox: {
-        globPatterns: ['**/*.{js,css,html,json,svg,png,mp3}'],
+        globPatterns: ['**/*.{js,css,html,json,svg,png,mp3,woff2}'],
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api\//],
       },
       manifest: {
         name: 'Pahunch',
         short_name: 'Pahunch',
-        theme_color: '#0B1B3F',
-        background_color: '#0B1B3F',
+        theme_color: '#161616',
+        background_color: '#161616',
         display: 'standalone',
         icons: [
           { src: '/icons/pahunch-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

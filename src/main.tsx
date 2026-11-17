@@ -1,5 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import '@fontsource/bricolage-grotesque/800.css'
+import '@fontsource/space-grotesk/500.css'
 import './index.css'
 import App from './App.tsx'
 

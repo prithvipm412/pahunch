@@ -1,8 +1,8 @@
 .sparsh-screen {
   position: fixed;
   inset: 0;
-  background: #000000;
-  color: #f2f2f2;
+  background: #0f0f0f;
+  color: #f1e6cf;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -113,7 +113,7 @@
 }
 
 .sparsh-part-badge {
-  fill: #000000;
+  fill: #0f0f0f;
   stroke: #ffffff;
   stroke-width: 2;
 }
@@ -139,8 +139,8 @@
 .sparsh-unlock-overlay {
   position: fixed;
   inset: 0;
-  background: #000000;
-  color: #f2f2f2;
+  background: #0f0f0f;
+  color: #f1e6cf;
   display: flex;
   align-items: center;
   justify-content: center;

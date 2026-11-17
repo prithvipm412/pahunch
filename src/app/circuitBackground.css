@@ -1,0 +1,92 @@
+.circuit-background {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background: #161616;
+}
+
+.circuit-tile-layer {
+  position: absolute;
+  inset: -600px;
+  animation: tile-drift 90s linear infinite;
+}
+
+@keyframes tile-drift {
+  from { transform: translate(0, 0); }
+  to { transform: translate(-600px, -600px); }
+}
+
+.circuit-overlay-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.wire-flow {
+  animation-name: wire-flow;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes wire-flow {
+  to { stroke-dashoffset: -34; }
+}
+
+.meter-needle {
+  transform-origin: 0px 2px;
+  animation: needle-swing 3.4s ease-in-out infinite;
+}
+
+@keyframes needle-swing {
+  0%, 100% { transform: rotate(-18deg); }
+  50% { transform: rotate(18deg); }
+}
+
+.breathing-coil {
+  transform-origin: 318px 60px;
+  animation: coil-breathe 5s ease-in-out infinite;
+}
+
+@keyframes coil-breathe {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.6); }
+}
+
+.switch-lever {
+  transform-origin: -10px 8px;
+  animation: switch-toggle 4.5s steps(1, end) infinite;
+}
+
+@keyframes switch-toggle {
+  0%, 60% { transform: rotate(0deg); }
+  70%, 100% { transform: rotate(16deg); }
+}
+
+.flicker-bulb {
+  filter: drop-shadow(0 0 6px #e2672e);
+  animation-name: bulb-flicker;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+}
+
+@keyframes bulb-flicker {
+  0%, 100% { opacity: 0.25; }
+  45% { opacity: 0.25; }
+  50% { opacity: 0.9; }
+  55% { opacity: 0.4; }
+  80% { opacity: 0.85; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .circuit-tile-layer,
+  .wire-flow,
+  .meter-needle,
+  .breathing-coil,
+  .switch-lever,
+  .flicker-bulb {
+    animation: none !important;
+  }
+}

@@ -8,7 +8,7 @@
 
 body {
   margin: 0;
-  font-family: system-ui, 'Segoe UI', Roboto, sans-serif;
-  background: #000000;
-  color: #f2f2f2;
+  font-family: "Space Grotesk", "Noto Sans Kannada", system-ui, sans-serif;
+  background: #161616;
+  color: #f1e6cf;
 }
