@@ -8,11 +8,10 @@ export type Direction = 'up' | 'down' | 'left' | 'right'
 
 export type Mode = 'build' | 'explore'
 
-export type BuildSubMode =
-  | { kind: 'idle' }
-  | { kind: 'partMenu'; target: GridPoint; selectedIndex: number }
-  | { kind: 'placingWire'; target: GridPoint; partType: ComponentType }
-  | { kind: 'editMenu'; target: GridPoint; componentId: string; selectedIndex: number }
+// 'idle': cursor swipes move around the grid. 'partChosen': the student has selected a part
+// (via tap count or hold — see SparshEvent) and the next swipe places it from the cursor to the
+// neighbouring dot in that direction.
+export type BuildSubMode = { kind: 'idle' } | { kind: 'partChosen'; partType: ComponentType }
 
 export interface ExploreState {
   point: GridPoint
@@ -35,6 +34,10 @@ export interface SparshState {
   cursor: GridPoint
   netlist: Netlist
   buildSub: BuildSubMode
+  // Count of completed one-finger taps not yet finalized into a choice (or into "repeat"/
+  // "cancel"). Lives here, not in index.tsx, so the whole tap-counting/hold scheme is covered by
+  // reducer tests rather than by timers.
+  pendingTapCount: number
   explore: ExploreState | null
   lastResult: SolveResult | null
   nextId: number
@@ -44,11 +47,17 @@ export interface SparshState {
 export type SparshEvent =
   | { type: 'INIT' }
   | { type: 'SWIPE'; direction: Direction }
-  | { type: 'DOUBLE_TAP' }
-  | { type: 'LONG_PRESS' }
+  | { type: 'TAP' } // one quick one-finger tap registered
+  | { type: 'TAP_FINALIZE' } // 350ms of silence after the last tap: resolve pendingTapCount
+  | { type: 'TAP_RESET' } // the tap sequence was interrupted (moved, or a multi-finger gesture started)
+  | { type: 'HOLD' } // one-finger press held >= 600ms without moving
   | { type: 'TWO_FINGER_TAP' }
+  | { type: 'TWO_FINGER_HOLD' }
+  | { type: 'TWO_FINGER_SWIPE_DOWN' }
+  | { type: 'TWO_FINGER_SWIPE_UP' }
   | { type: 'TWO_FINGER_DOUBLE_TAP' }
   | { type: 'TWO_FINGER_SWIPE_LEFT' }
+  | { type: 'THREE_FINGER_TAP' }
   | { type: 'SOLVE_RESULT'; result: SolveResult }
   | { type: 'DRAG'; point: GridPoint }
   | { type: 'REST'; point: GridPoint }
@@ -68,8 +77,19 @@ export interface SparshTransition {
 }
 
 const EDGE_VIBRATION = [30, 40, 30]
-const TICK_VIBRATION = 10
+const MOVE_TICK_VIBRATION = 10
+const TAP_TICK_VIBRATION = 8
 const PULSE_VIBRATION = 25
+
+// Each part gets its own vibration pattern the moment it's chosen (not when placed), so a
+// blind student can feel which part they picked without waiting for speech.
+const CHOICE_VIBRATION: Record<ComponentType, number[]> = {
+  wire: [20],
+  bulb: [20, 60, 20],
+  resistor: [20, 60, 20, 60, 20],
+  battery: [80],
+  switch: [40, 40, 80],
+}
 
 export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
   return {
@@ -77,6 +97,7 @@ export function createInitialState(gridSize: number = GRID_SIZE): SparshState {
     cursor: { row: 0, col: 0 },
     netlist: { gridSize, components: [], source: 'sparsh' },
     buildSub: { kind: 'idle' },
+    pendingTapCount: 0,
     explore: null,
     lastResult: null,
     nextId: 1,
@@ -173,31 +194,28 @@ function findComponentAt(netlist: Netlist, point: GridPoint): CircuitComponent |
   return netlist.components.find((c) => pointsEqual(c.from, point) || pointsEqual(c.to, point))
 }
 
+// The *most recently placed* component touching `point` — used by the 2-finger-swipe-down
+// remove gesture, since netlist.components is append-ordered.
+function findLatestComponentAt(netlist: Netlist, point: GridPoint): CircuitComponent | undefined {
+  for (let i = netlist.components.length - 1; i >= 0; i--) {
+    const c = netlist.components[i]
+    if (pointsEqual(c.from, point) || pointsEqual(c.to, point)) return c
+  }
+  return undefined
+}
+
+function segmentOccupied(netlist: Netlist, a: GridPoint, b: GridPoint): boolean {
+  return netlist.components.some(
+    (c) => (pointsEqual(c.from, a) && pointsEqual(c.to, b)) || (pointsEqual(c.from, b) && pointsEqual(c.to, a)),
+  )
+}
+
 function stateClipFor(state: SolveResult['components'][number]['state']): ClipName {
   return `state_${state}` as ClipName
 }
 
 function switchClipFor(closed: boolean): ClipName {
   return closed ? 'switch_closed' : 'switch_open'
-}
-
-type EditMenuOption = 'remove' | 'toggle' | 'add'
-
-// 'add' lets a new part be started from a dot that already has a part on it — without it, a
-// loop could never be closed, since the dot that closes it is, by definition, already occupied
-// by the parts on either side of the gap.
-function editMenuOptionsFor(component: CircuitComponent): EditMenuOption[] {
-  return component.type === 'switch' ? ['remove', 'toggle', 'add'] : ['remove', 'add']
-}
-
-// Spoken preview for the currently-highlighted edit-menu option, built only from the fixed
-// clip vocabulary: "remove" previews as the 'removed' clip, "toggle" previews the switch state
-// it would flip *to*, and "add" reuses 'menu_open' since it leads to the same part chooser as
-// double-tapping an empty dot.
-function editMenuOptionClip(option: EditMenuOption, component: CircuitComponent): ClipName {
-  if (option === 'remove') return 'removed'
-  if (option === 'add') return 'menu_open'
-  return switchClipFor(component.closed !== true)
 }
 
 function noChange(state: SparshState): SparshTransition {
@@ -221,128 +239,88 @@ function summaryClipsFor(netlist: Netlist): ClipName[] {
   return clips
 }
 
-function handleBuildSwipe(state: SparshState, direction: Direction): SparshTransition {
-  const { buildSub, netlist, cursor } = state
-
-  if (buildSub.kind === 'partMenu') {
-    if (direction !== 'left' && direction !== 'right') return noChange(state)
-    const delta = direction === 'right' ? 1 : -1
-    const nextIndex = (buildSub.selectedIndex + delta + PART_MENU_ORDER.length) % PART_MENU_ORDER.length
-    return {
-      state: { ...state, buildSub: { ...buildSub, selectedIndex: nextIndex } },
-      effects: [{ type: 'speak', clips: [partClipFor(PART_MENU_ORDER[nextIndex])] }],
-    }
-  }
-
-  if (buildSub.kind === 'editMenu') {
-    if (direction !== 'left' && direction !== 'right') return noChange(state)
-    const component = netlist.components.find((c) => c.id === buildSub.componentId)
-    if (!component) return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [] }
-    const options = editMenuOptionsFor(component)
-    const delta = direction === 'right' ? 1 : -1
-    const nextIndex = (buildSub.selectedIndex + delta + options.length) % options.length
-    return {
-      state: { ...state, buildSub: { ...buildSub, selectedIndex: nextIndex } },
-      effects: [{ type: 'speak', clips: [editMenuOptionClip(options[nextIndex], component)] }],
-    }
-  }
-
-  if (buildSub.kind === 'placingWire') {
-    const neighbor = neighborInDirection(buildSub.target, direction, netlist.gridSize)
-    if (!neighbor) {
-      return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'vibrate', pattern: EDGE_VIBRATION }] }
-    }
-    const component: CircuitComponent = {
-      id: `sparsh-${state.nextId}`,
-      type: buildSub.partType,
-      from: buildSub.target,
-      to: neighbor,
-      ...(buildSub.partType === 'switch' ? { closed: false } : {}),
-    }
-    return withLessonCheck({
-      state: {
-        ...state,
-        nextId: state.nextId + 1,
-        netlist: { ...netlist, components: [...netlist.components, component] },
-        buildSub: { kind: 'idle' },
-      },
-      effects: [{ type: 'speak', clips: ['placed'] }],
-    })
-  }
-
-  // idle: move the cursor
-  const next = neighborInDirection(cursor, direction, netlist.gridSize)
-  if (!next) {
-    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'vibrate', pattern: EDGE_VIBRATION }] }
-  }
-  const component = findComponentAt(netlist, next)
-  const clips: ClipName[] = [posClipFor(next.row, next.col), component ? partClipFor(component.type) : 'empty']
+function choosePart(state: SparshState, partType: ComponentType): SparshTransition {
   return {
-    state: { ...state, cursor: next },
-    effects: [{ type: 'speak', clips }, { type: 'vibrate', pattern: TICK_VIBRATION }],
+    state: { ...state, pendingTapCount: 0, buildSub: { kind: 'partChosen', partType } },
+    effects: [
+      { type: 'speak', clips: [partClipFor(partType), 'swipe_destination'] },
+      { type: 'vibrate', pattern: CHOICE_VIBRATION[partType] },
+    ],
   }
 }
 
-function handleBuildDoubleTap(state: SparshState): SparshTransition {
-  const { buildSub, netlist, cursor } = state
+// What a finalized one-finger tap count (1-4) means. Count 2/3/4 always (re)choose a part, even
+// if one was already chosen — a student can change their mind without cancelling first. Count 1
+// is context-dependent: "repeat" when idle, "cancel" when a part is already chosen.
+function resolveTapCount(state: SparshState, rawCount: number): SparshTransition {
+  const count = Math.min(rawCount, 4)
+  if (count === 2) return choosePart(state, 'wire')
+  if (count === 3) return choosePart(state, 'bulb')
+  if (count === 4) return choosePart(state, 'resistor')
 
-  if (buildSub.kind === 'partMenu') {
-    const partType = PART_MENU_ORDER[buildSub.selectedIndex]
-    return {
-      state: { ...state, buildSub: { kind: 'placingWire', target: buildSub.target, partType } },
-      effects: [{ type: 'speak', clips: ['wire_direction'] }],
-    }
+  if (state.buildSub.kind === 'partChosen') {
+    return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [{ type: 'speak', clips: ['cancelled'] }] }
   }
+  const component = findComponentAt(state.netlist, state.cursor)
+  const clips: ClipName[] = [
+    posClipFor(state.cursor.row, state.cursor.col),
+    component ? partClipFor(component.type) : 'empty',
+  ]
+  return { state, effects: [{ type: 'speak', clips }] }
+}
 
-  if (buildSub.kind === 'editMenu') {
-    const component = netlist.components.find((c) => c.id === buildSub.componentId)
-    if (!component) return { state: { ...state, buildSub: { kind: 'idle' } }, effects: [] }
-    const options = editMenuOptionsFor(component)
-    const option = options[buildSub.selectedIndex]
-    if (option === 'remove') {
-      return withLessonCheck({
-        state: {
-          ...state,
-          buildSub: { kind: 'idle' },
-          netlist: { ...netlist, components: netlist.components.filter((c) => c.id !== component.id) },
-        },
-        effects: [{ type: 'speak', clips: ['removed'] }],
-      })
-    }
-    if (option === 'add') {
-      return {
-        state: { ...state, buildSub: { kind: 'partMenu', target: buildSub.target, selectedIndex: 0 } },
-        effects: [{ type: 'speak', clips: ['menu_open', partClipFor(PART_MENU_ORDER[0])] }],
-      }
-    }
-    const nextClosed = component.closed !== true
-    return withLessonCheck({
-      state: {
-        ...state,
-        buildSub: { kind: 'idle' },
-        netlist: {
-          ...netlist,
-          components: netlist.components.map((c) => (c.id === component.id ? { ...c, closed: nextClosed } : c)),
-        },
-      },
-      effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }],
-    })
+function handleCursorMove(state: SparshState, direction: Direction): SparshTransition {
+  const next = neighborInDirection(state.cursor, direction, state.netlist.gridSize)
+  if (!next) {
+    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'vibrate', pattern: EDGE_VIBRATION }] }
   }
-
-  if (buildSub.kind === 'placingWire') return noChange(state)
-
-  // idle: open the menu for the dot under the cursor
-  const component = findComponentAt(netlist, cursor)
-  if (!component) {
-    return {
-      state: { ...state, buildSub: { kind: 'partMenu', target: cursor, selectedIndex: 0 } },
-      effects: [{ type: 'speak', clips: ['menu_open', partClipFor(PART_MENU_ORDER[0])] }],
-    }
-  }
+  const component = findComponentAt(state.netlist, next)
+  const clips: ClipName[] = [posClipFor(next.row, next.col), component ? partClipFor(component.type) : 'empty']
   return {
-    state: { ...state, buildSub: { kind: 'editMenu', target: cursor, componentId: component.id, selectedIndex: 0 } },
-    effects: [{ type: 'speak', clips: [editMenuOptionClip(editMenuOptionsFor(component)[0], component)] }],
+    state: { ...state, cursor: next },
+    effects: [{ type: 'speak', clips }, { type: 'vibrate', pattern: MOVE_TICK_VIBRATION }],
   }
+}
+
+function handlePlacement(state: SparshState, partType: ComponentType, direction: Direction): SparshTransition {
+  const { netlist, cursor } = state
+  const neighbor = neighborInDirection(cursor, direction, netlist.gridSize)
+  if (!neighbor) {
+    return { state, effects: [{ type: 'speak', clips: ['edge'] }, { type: 'vibrate', pattern: EDGE_VIBRATION }] }
+  }
+  if (segmentOccupied(netlist, cursor, neighbor)) {
+    return { state, effects: [{ type: 'speak', clips: ['segment_occupied'] }] }
+  }
+
+  const component: CircuitComponent = {
+    id: `sparsh-${state.nextId}`,
+    type: partType,
+    from: cursor,
+    to: neighbor,
+    ...(partType === 'switch' ? { closed: false } : {}),
+  }
+  // Wire stays chosen (sticky) so consecutive swipes keep laying wire; every other part
+  // deselects itself once placed.
+  const nextBuildSub: BuildSubMode = partType === 'wire' ? { kind: 'partChosen', partType: 'wire' } : { kind: 'idle' }
+
+  return withLessonCheck({
+    state: {
+      ...state,
+      nextId: state.nextId + 1,
+      cursor: neighbor,
+      netlist: { ...netlist, components: [...netlist.components, component] },
+      buildSub: nextBuildSub,
+    },
+    effects: [{ type: 'speak', clips: ['placed', partClipFor(partType)] }],
+  })
+}
+
+function handleBuildSwipe(state: SparshState, direction: Direction): SparshTransition {
+  const cleared: SparshState = { ...state, pendingTapCount: 0 }
+  if (cleared.buildSub.kind === 'partChosen') {
+    return handlePlacement(cleared, cleared.buildSub.partType, direction)
+  }
+  return handleCursorMove(cleared, direction)
 }
 
 function handleSolveResult(state: SparshState, result: SolveResult): SparshTransition {
@@ -407,6 +385,36 @@ function handleRest(state: SparshState, point: GridPoint): SparshTransition {
   return { state, effects: [{ type: 'speak', clips: [partClipFor(component.type), stateClipFor(result.state)] }] }
 }
 
+function handleRemoveAtCursor(state: SparshState): SparshTransition {
+  const component = findLatestComponentAt(state.netlist, state.cursor)
+  if (!component) return { state, effects: [{ type: 'speak', clips: ['empty'] }] }
+  return withLessonCheck({
+    state: {
+      ...state,
+      netlist: { ...state.netlist, components: state.netlist.components.filter((c) => c.id !== component.id) },
+    },
+    effects: [{ type: 'speak', clips: ['removed', partClipFor(component.type)] }],
+  })
+}
+
+function handleToggleSwitchAtCursor(state: SparshState): SparshTransition {
+  const component = state.netlist.components.find(
+    (c) => c.type === 'switch' && (pointsEqual(c.from, state.cursor) || pointsEqual(c.to, state.cursor)),
+  )
+  if (!component) return { state, effects: [{ type: 'speak', clips: ['empty'] }] }
+  const nextClosed = component.closed !== true
+  return withLessonCheck({
+    state: {
+      ...state,
+      netlist: {
+        ...state.netlist,
+        components: state.netlist.components.map((c) => (c.id === component.id ? { ...c, closed: nextClosed } : c)),
+      },
+    },
+    effects: [{ type: 'speak', clips: [switchClipFor(nextClosed)] }],
+  })
+}
+
 export function sparshReducer(state: SparshState, event: SparshEvent): SparshTransition {
   switch (event.type) {
     case 'INIT':
@@ -416,13 +424,34 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       if (state.mode !== 'build') return noChange(state)
       return handleBuildSwipe(state, event.direction)
 
-    case 'DOUBLE_TAP':
+    case 'TAP':
       if (state.mode !== 'build') return noChange(state)
-      return handleBuildDoubleTap(state)
+      return {
+        state: { ...state, pendingTapCount: state.pendingTapCount + 1 },
+        effects: [{ type: 'vibrate', pattern: TAP_TICK_VIBRATION }],
+      }
 
-    case 'LONG_PRESS':
+    case 'TAP_FINALIZE': {
       if (state.mode !== 'build') return noChange(state)
-      return { state, effects: [{ type: 'speak', clips: summaryClipsFor(state.netlist) }] }
+      const count = state.pendingTapCount
+      if (count === 0) return noChange(state)
+      return resolveTapCount({ ...state, pendingTapCount: 0 }, count)
+    }
+
+    case 'TAP_RESET':
+      if (state.pendingTapCount === 0) return noChange(state)
+      return noChange({ ...state, pendingTapCount: 0 })
+
+    case 'HOLD': {
+      if (state.mode !== 'build') return noChange(state)
+      const count = state.pendingTapCount
+      const cleared = { ...state, pendingTapCount: 0 }
+      if (count === 0) return choosePart(cleared, 'battery')
+      if (count === 1) return choosePart(cleared, 'switch')
+      // Unexpected (2+ taps then a hold, not part of the defined scheme): just finalize the
+      // count that was already building, rather than silently dropping the gesture.
+      return resolveTapCount(cleared, count)
+    }
 
     case 'TWO_FINGER_TAP': {
       if (state.mode === 'build') return { state, effects: [{ type: 'solve' }] }
@@ -433,6 +462,18 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
       return { state: { ...state, mode: 'build', explore: null }, effects }
     }
 
+    case 'TWO_FINGER_HOLD':
+      if (state.mode !== 'build') return noChange(state)
+      return { state, effects: [{ type: 'speak', clips: summaryClipsFor(state.netlist) }] }
+
+    case 'TWO_FINGER_SWIPE_DOWN':
+      if (state.mode !== 'build') return noChange(state)
+      return handleRemoveAtCursor(state)
+
+    case 'TWO_FINGER_SWIPE_UP':
+      if (state.mode !== 'build') return noChange(state)
+      return handleToggleSwitchAtCursor(state)
+
     case 'TWO_FINGER_DOUBLE_TAP': {
       const wasExploring = state.mode === 'explore'
       return {
@@ -440,6 +481,7 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
           ...state,
           mode: 'build',
           buildSub: { kind: 'idle' },
+          pendingTapCount: 0,
           explore: null,
           cursor: { row: 0, col: 0 },
           netlist: { ...state.netlist, components: [] },
@@ -451,6 +493,9 @@ export function sparshReducer(state: SparshState, event: SparshEvent): SparshTra
         ],
       }
     }
+
+    case 'THREE_FINGER_TAP':
+      return { state, effects: [{ type: 'speak', clips: ['help'] }] }
 
     case 'SOLVE_RESULT':
       return handleSolveResult(state, event.result)
