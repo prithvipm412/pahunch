@@ -270,32 +270,140 @@ describe('api/scan Netlist validation', () => {
     ).toBe(false)
   })
 
-  it('rejects components whose from and to points are not adjacent', () => {
-    // Jump of 2 horizontal dots
-    const jumpResult = validateNetlist({
-      components: [{ id: 'w1', type: 'wire', from: { row: 0, col: 0 }, to: { row: 0, col: 2 } }],
+  it('normalizes and splits a long straight wire into unit segments with unique IDs', () => {
+    // Horizontal wire spanning 3 dots: (0, 0) -> (0, 3)
+    const result = validateNetlist({
+      components: [
+        { id: 'wire_top', type: 'wire', from: { row: 0, col: 0 }, to: { row: 0, col: 3 } },
+      ],
     })
-    expect(jumpResult.ok).toBe(false)
-    if (!jumpResult.ok) {
-      expect(jumpResult.error).toContain('not adjacent')
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.netlist.components.length).toBe(3)
+      const [seg0, seg1, seg2] = result.netlist.components
+      expect(seg0).toEqual({
+        id: 'wire_top',
+        type: 'wire',
+        from: { row: 0, col: 0 },
+        to: { row: 0, col: 1 },
+      })
+      expect(seg1).toEqual({
+        id: 'wire_top_seg_1',
+        type: 'wire',
+        from: { row: 0, col: 1 },
+        to: { row: 0, col: 2 },
+      })
+      expect(seg2).toEqual({
+        id: 'wire_top_seg_2',
+        type: 'wire',
+        from: { row: 0, col: 2 },
+        to: { row: 0, col: 3 },
+      })
+      // Unique IDs
+      const ids = new Set(result.netlist.components.map((c) => c.id))
+      expect(ids.size).toBe(3)
     }
+  })
 
+  it('normalizes and splits a long vertical wire in reverse direction', () => {
+    // Vertical wire spanning 2 dots backwards: (3, 2) -> (1, 2)
+    const result = validateNetlist({
+      components: [
+        { id: 'w_down', type: 'wire', from: { row: 3, col: 2 }, to: { row: 1, col: 2 } },
+      ],
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.netlist.components.length).toBe(2)
+      expect(result.netlist.components[0]).toEqual({
+        id: 'w_down',
+        type: 'wire',
+        from: { row: 3, col: 2 },
+        to: { row: 2, col: 2 },
+      })
+      expect(result.netlist.components[1]).toEqual({
+        id: 'w_down_seg_1',
+        type: 'wire',
+        from: { row: 2, col: 2 },
+        to: { row: 1, col: 2 },
+      })
+    }
+  })
+
+  it('keeps battery/bulb/resistor/switch on the first unit segment and fills rest with wires', () => {
+    const input = {
+      components: [
+        {
+          id: 'bat1',
+          type: 'battery',
+          from: { row: 0, col: 0 },
+          to: { row: 0, col: 2 },
+          value: 9,
+        },
+        {
+          id: 'bulb1',
+          type: 'bulb',
+          from: { row: 1, col: 4 },
+          to: { row: 3, col: 4 },
+        },
+      ],
+    }
+    const result = validateNetlist(input)
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // bat1 split into battery + 1 wire
+      // bulb1 split into bulb + 1 wire
+      expect(result.netlist.components.length).toBe(4)
+
+      expect(result.netlist.components[0]).toEqual({
+        id: 'bat1',
+        type: 'battery',
+        from: { row: 0, col: 0 },
+        to: { row: 0, col: 1 },
+        value: 9,
+      })
+      expect(result.netlist.components[1]).toEqual({
+        id: 'bat1_wire_1',
+        type: 'wire',
+        from: { row: 0, col: 1 },
+        to: { row: 0, col: 2 },
+      })
+
+      expect(result.netlist.components[2]).toEqual({
+        id: 'bulb1',
+        type: 'bulb',
+        from: { row: 1, col: 4 },
+        to: { row: 2, col: 4 },
+      })
+      expect(result.netlist.components[3]).toEqual({
+        id: 'bulb1_wire_1',
+        type: 'wire',
+        from: { row: 2, col: 4 },
+        to: { row: 3, col: 4 },
+      })
+
+      const ids = new Set(result.netlist.components.map((c) => c.id))
+      expect(ids.size).toBe(4)
+    }
+  })
+
+  it('rejects diagonal parts and zero-length parts', () => {
     // Diagonal connection
     const diagResult = validateNetlist({
       components: [{ id: 'w1', type: 'wire', from: { row: 0, col: 0 }, to: { row: 1, col: 1 } }],
     })
     expect(diagResult.ok).toBe(false)
     if (!diagResult.ok) {
-      expect(diagResult.error).toContain('not adjacent')
+      expect(diagResult.error).toContain('diagonal')
     }
 
-    // Same point connection
+    // Same point connection (zero length)
     const sameResult = validateNetlist({
       components: [{ id: 'w1', type: 'wire', from: { row: 2, col: 2 }, to: { row: 2, col: 2 } }],
     })
     expect(sameResult.ok).toBe(false)
     if (!sameResult.ok) {
-      expect(sameResult.error).toContain('not adjacent')
+      expect(sameResult.error).toContain('zero length')
     }
   })
 })

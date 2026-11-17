@@ -120,16 +120,18 @@ function isValidGridPoint(pt: unknown): pt is GridPoint {
   )
 }
 
-function isAdjacent(from: GridPoint, to: GridPoint): boolean {
-  const rowDiff = Math.abs(from.row - to.row)
-  const colDiff = Math.abs(from.col - to.col)
-  return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)
-}
+
 
 /**
- * Validates that parsed JSON strictly matches the Netlist shape:
+ * Validates and normalizes parsed JSON to match the Netlist shape:
  * - components array
- * - every component has known type, id, row/col integers 0..4, and adjacent from/to
+ * - every component has known type, id, row/col integers 0..4
+ * - straight horizontal/vertical parts spanning >1 dot are split into unit segments:
+ *   • a long straight WIRE splits into unit wire segments
+ *   • a long straight battery/bulb/resistor/switch keeps the component on the first unit segment,
+ *     and fills the rest with unit wire segments
+ *   • split segments receive unique IDs
+ * - rejects diagonal parts, zero-length parts, or out-of-range coordinates
  */
 export function validateNetlist(
   data: unknown,
@@ -144,6 +146,25 @@ export function validateNetlist(
   }
 
   const validatedComponents: CircuitComponent[] = []
+  const usedIds = new Set<string>()
+
+  // Pre-seed used IDs from input
+  for (const item of obj.components) {
+    if (item && typeof item === 'object' && typeof (item as Record<string, unknown>).id === 'string') {
+      const idStr = ((item as Record<string, unknown>).id as string).trim()
+      if (idStr) usedIds.add(idStr)
+    }
+  }
+
+  function getUniqueId(baseId: string): string {
+    let candidate = baseId
+    let counter = 1
+    while (usedIds.has(candidate)) {
+      candidate = `${baseId}_${counter++}`
+    }
+    usedIds.add(candidate)
+    return candidate
+  }
 
   for (let i = 0; i < obj.components.length; i++) {
     const raw = obj.components[i]
@@ -161,35 +182,104 @@ export function validateNetlist(
     }
 
     if (!isValidGridPoint(c.from)) {
-      return { ok: false, error: `Component ${c.id} has invalid from point` }
+      return { ok: false, error: `Component ${c.id} has invalid or out-of-range from point` }
     }
 
     if (!isValidGridPoint(c.to)) {
-      return { ok: false, error: `Component ${c.id} has invalid to point` }
+      return { ok: false, error: `Component ${c.id} has invalid or out-of-range to point` }
     }
 
-    if (!isAdjacent(c.from, c.to)) {
+    const rowDiff = c.to.row - c.from.row
+    const colDiff = c.to.col - c.from.col
+    const absRowDiff = Math.abs(rowDiff)
+    const absColDiff = Math.abs(colDiff)
+
+    // Reject zero-length parts
+    if (absRowDiff === 0 && absColDiff === 0) {
       return {
         ok: false,
-        error: `Component ${c.id} from (${c.from.row},${c.from.col}) and to (${c.to.row},${c.to.col}) are not adjacent`,
+        error: `Component ${c.id} has zero length (from and to are the same point)`,
       }
     }
 
-    const comp: CircuitComponent = {
-      id: c.id.trim(),
-      type: c.type as ComponentType,
-      from: { row: c.from.row, col: c.from.col },
-      to: { row: c.to.row, col: c.to.col },
+    // Only reject diagonal parts: straight horizontal or straight vertical are allowed
+    if (absRowDiff > 0 && absColDiff > 0) {
+      return {
+        ok: false,
+        error: `Component ${c.id} is diagonal from (${c.from.row},${c.from.col}) to (${c.to.row},${c.to.col})`,
+      }
     }
 
-    if (typeof c.value === 'number' && !isNaN(c.value)) {
-      comp.value = c.value
-    }
-    if (typeof c.closed === 'boolean') {
-      comp.closed = c.closed
-    }
+    const steps = Math.max(absRowDiff, absColDiff)
+    const stepRow = absRowDiff === 0 ? 0 : Math.sign(rowDiff)
+    const stepCol = absColDiff === 0 ? 0 : Math.sign(colDiff)
+    const rawId = c.id.trim()
 
-    validatedComponents.push(comp)
+    if (steps === 1) {
+      // Already a unit segment
+      const comp: CircuitComponent = {
+        id: rawId,
+        type: c.type as ComponentType,
+        from: { row: c.from.row, col: c.from.col },
+        to: { row: c.to.row, col: c.to.col },
+      }
+      if (typeof c.value === 'number' && !isNaN(c.value)) comp.value = c.value
+      if (typeof c.closed === 'boolean') comp.closed = c.closed
+      validatedComponents.push(comp)
+    } else {
+      // Multi-dot span: split into unit segments
+      if (c.type === 'wire') {
+        for (let k = 0; k < steps; k++) {
+          const segFrom: GridPoint = {
+            row: c.from.row + k * stepRow,
+            col: c.from.col + k * stepCol,
+          }
+          const segTo: GridPoint = {
+            row: c.from.row + (k + 1) * stepRow,
+            col: c.from.col + (k + 1) * stepCol,
+          }
+          const segId = k === 0 ? rawId : getUniqueId(`${rawId}_seg_${k}`)
+          validatedComponents.push({
+            id: segId,
+            type: 'wire',
+            from: segFrom,
+            to: segTo,
+          })
+        }
+      } else {
+        // Battery / bulb / resistor / switch: keep component on first unit segment, fill rest with wires
+        for (let k = 0; k < steps; k++) {
+          const segFrom: GridPoint = {
+            row: c.from.row + k * stepRow,
+            col: c.from.col + k * stepCol,
+          }
+          const segTo: GridPoint = {
+            row: c.from.row + (k + 1) * stepRow,
+            col: c.from.col + (k + 1) * stepCol,
+          }
+
+          if (k === 0) {
+            const comp: CircuitComponent = {
+              id: rawId,
+              type: c.type as ComponentType,
+              from: segFrom,
+              to: segTo,
+            }
+            if (typeof c.value === 'number' && !isNaN(c.value)) comp.value = c.value
+            if (typeof c.closed === 'boolean') comp.closed = c.closed
+            validatedComponents.push(comp)
+          } else {
+            const wireId = getUniqueId(`${rawId}_wire_${k}`)
+            validatedComponents.push({
+              id: wireId,
+              type: 'wire',
+              from: segFrom,
+              to: segTo,
+            })
+          }
+        }
+      }
+    }
   }
 
   const confidence =
