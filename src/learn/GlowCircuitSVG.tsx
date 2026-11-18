@@ -5,7 +5,7 @@
  * and a bulb is lit, it glows with a warmer, brighter incandescent core
  * and soft radial gradient halo matching Build mode.
  */
-import type { Netlist, SolveResult } from '../contracts/netlist'
+import type { Netlist, SolveResult, ComponentResult } from '../contracts/netlist'
 
 interface Props {
   netlist: Netlist
@@ -259,6 +259,37 @@ function Switch({ r1, c1, r2, c2, closed, highlight, onTap }: ComponentProps & {
   )
 }
 
+function formatReading(val: number, unit: string): string {
+  const mag = Math.abs(val)
+  if (mag < 0.0005) return `0 ${unit}`
+  if (mag >= 100) return `${Math.round(mag)} ${unit}`
+  if (mag >= 10) return `${mag.toFixed(1)} ${unit}`
+  const str = mag.toFixed(2).replace(/\.?0+$/, '')
+  return `${str} ${unit}`
+}
+
+function getLabelPlacement(r1: number, c1: number, r2: number, c2: number) {
+  const m = mid(r1, c1, r2, c2)
+  const isHoriz = r1 === r2
+  if (isHoriz) {
+    const placeBelow = r1 === 0
+    return {
+      x: m.x,
+      y: placeBelow ? m.y + 18 : m.y - 18,
+      textAnchor: 'middle' as const,
+      dominantBaseline: 'central' as const,
+    }
+  } else {
+    const placeLeft = c1 >= 4
+    return {
+      x: placeLeft ? m.x - 18 : m.x + 18,
+      y: m.y,
+      textAnchor: placeLeft ? ('end' as const) : ('start' as const),
+      dominantBaseline: 'central' as const,
+    }
+  }
+}
+
 function Wire({ r1, c1, r2, c2, highlight, onTap }: ComponentProps) {
   const a = pt(r1, c1); const b = pt(r2, c2)
   const stroke = highlight ? '#EF5350' : 'var(--clr-accent, #4FC3F7)'
@@ -270,15 +301,193 @@ function Wire({ r1, c1, r2, c2, highlight, onTap }: ComponentProps) {
   )
 }
 
+function Ammeter({ r1, c1, r2, c2, reading, highlight, onTap }: ComponentProps & { reading?: string }) {
+  const a = pt(r1, c1); const b = pt(r2, c2)
+  const m = mid(r1, c1, r2, c2)
+  const isHoriz = r1 === r2
+  const R = 12
+  const wireA = isHoriz
+    ? { x1: a.x, y1: a.y, x2: m.x - R, y2: m.y }
+    : { x1: a.x, y1: a.y, x2: m.x, y2: m.y - R }
+  const wireB = isHoriz
+    ? { x1: m.x + R, y1: m.y, x2: b.x, y2: b.y }
+    : { x1: m.x, y1: m.y + R, x2: b.x, y2: b.y }
+
+  const stroke = highlight ? '#EF5350' : 'var(--clr-accent, #4FC3F7)'
+  const labelPos = getLabelPlacement(r1, c1, r2, c2)
+
+  return (
+    <g
+      strokeWidth={highlight ? 3 : 2}
+      fill="none"
+      onClick={onTap}
+      style={onTap ? { cursor: 'pointer' } : undefined}
+    >
+      <line {...wireA} stroke={stroke} />
+      <line {...wireB} stroke={stroke} />
+      <circle cx={m.x} cy={m.y} r={R} stroke={stroke} strokeWidth={highlight ? 3 : 2} fill="#0f0f0f" />
+      <text
+        x={m.x}
+        y={m.y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill={stroke}
+        fontSize="12"
+        fontWeight="800"
+        fontFamily="system-ui, -apple-system, sans-serif"
+      >
+        A
+      </text>
+      {reading && (
+        <text
+          x={labelPos.x}
+          y={labelPos.y}
+          textAnchor={labelPos.textAnchor}
+          dominantBaseline={labelPos.dominantBaseline}
+          fill={highlight ? '#EF5350' : '#81D4FA'}
+          fontSize="10"
+          fontWeight="700"
+          fontFamily="system-ui, -apple-system, sans-serif"
+        >
+          {reading}
+        </text>
+      )}
+    </g>
+  )
+}
+
+function Voltmeter({ r1, c1, r2, c2, reading, highlight, onTap }: ComponentProps & { reading?: string }) {
+  const a = pt(r1, c1); const b = pt(r2, c2)
+  const m = mid(r1, c1, r2, c2)
+  const isHoriz = r1 === r2
+  const R = 12
+  const wireA = isHoriz
+    ? { x1: a.x, y1: a.y, x2: m.x - R, y2: m.y }
+    : { x1: a.x, y1: a.y, x2: m.x, y2: m.y - R }
+  const wireB = isHoriz
+    ? { x1: m.x + R, y1: m.y, x2: b.x, y2: b.y }
+    : { x1: m.x, y1: m.y + R, x2: b.x, y2: b.y }
+
+  const stroke = highlight ? '#EF5350' : 'var(--clr-accent, #4FC3F7)'
+  const labelPos = getLabelPlacement(r1, c1, r2, c2)
+
+  return (
+    <g
+      strokeWidth={highlight ? 3 : 2}
+      fill="none"
+      onClick={onTap}
+      style={onTap ? { cursor: 'pointer' } : undefined}
+    >
+      <line {...wireA} stroke={stroke} />
+      <line {...wireB} stroke={stroke} />
+      <circle cx={m.x} cy={m.y} r={R} stroke={stroke} strokeWidth={highlight ? 3 : 2} fill="#0f0f0f" />
+      <text
+        x={m.x}
+        y={m.y}
+        textAnchor="middle"
+        dominantBaseline="central"
+        fill={stroke}
+        fontSize="12"
+        fontWeight="800"
+        fontFamily="system-ui, -apple-system, sans-serif"
+      >
+        V
+      </text>
+      {reading && (
+        <text
+          x={labelPos.x}
+          y={labelPos.y}
+          textAnchor={labelPos.textAnchor}
+          dominantBaseline={labelPos.dominantBaseline}
+          fill={highlight ? '#EF5350' : '#81D4FA'}
+          fontSize="10"
+          fontWeight="700"
+          fontFamily="system-ui, -apple-system, sans-serif"
+        >
+          {reading}
+        </text>
+      )}
+    </g>
+  )
+}
+
+function Fuse({ r1, c1, r2, c2, isBlown, reading, highlight, onTap }: ComponentProps & { isBlown?: boolean; reading?: string }) {
+  const a = pt(r1, c1); const b = pt(r2, c2)
+  const m = mid(r1, c1, r2, c2)
+  const isHoriz = r1 === r2
+  const rw = isHoriz ? 16 : 8
+  const rh = isHoriz ? 8 : 16
+
+  const stroke = isBlown ? '#EF5350' : highlight ? '#EF5350' : 'var(--clr-accent, #4FC3F7)'
+  const labelPos = getLabelPlacement(r1, c1, r2, c2)
+  const labelFill = isBlown || highlight ? '#EF5350' : '#81D4FA'
+  const gap = 5
+
+  return (
+    <g
+      stroke={stroke}
+      strokeWidth={highlight ? 3 : 2}
+      fill="none"
+      onClick={onTap}
+      style={onTap ? { cursor: 'pointer' } : undefined}
+    >
+      {isBlown ? (
+        isHoriz ? (
+          <>
+            <line x1={a.x} y1={a.y} x2={m.x - gap} y2={m.y} />
+            <line x1={m.x + gap} y1={m.y} x2={b.x} y2={b.y} />
+          </>
+        ) : (
+          <>
+            <line x1={a.x} y1={a.y} x2={m.x} y2={m.y - gap} />
+            <line x1={m.x} y1={m.y + gap} x2={b.x} y2={b.y} />
+          </>
+        )
+      ) : (
+        <line x1={a.x} y1={a.y} x2={b.x} y2={b.y} />
+      )}
+      <rect
+        x={m.x - rw}
+        y={m.y - rh}
+        width={rw * 2}
+        height={rh * 2}
+        strokeWidth={highlight ? 3 : 2}
+        fill={isBlown ? 'rgba(239, 83, 80, 0.15)' : 'rgba(79, 195, 247, 0.05)'}
+      />
+      {reading && (
+        <text
+          x={labelPos.x}
+          y={labelPos.y}
+          textAnchor={labelPos.textAnchor}
+          dominantBaseline={labelPos.dominantBaseline}
+          fill={labelFill}
+          fontSize="10"
+          fontWeight="700"
+          fontFamily="system-ui, -apple-system, sans-serif"
+          stroke="none"
+        >
+          {reading}
+        </text>
+      )}
+    </g>
+  )
+}
+
 export default function GlowCircuitSVG({ netlist, solveResult, revealed, highlightId, onComponentTap }: Props) {
   const GRID = netlist.gridSize
   const size = PAD * 2 + (GRID - 1) * CELL
 
-  // Build a map from component id → state for fast lookup
+  // Build a map from component id → state and result for fast lookup
   const stateMap = new Map<string, string>()
+  const resultMap = new Map<string, ComponentResult>()
   if (solveResult) {
-    for (const cr of solveResult.components) stateMap.set(cr.id, cr.state)
+    for (const cr of solveResult.components) {
+      stateMap.set(cr.id, cr.state)
+      resultMap.set(cr.id, cr)
+    }
   }
+
+  const resultsActive = Boolean(solveResult && (revealed === undefined || revealed === true))
 
   return (
     <svg
@@ -406,6 +615,19 @@ export default function GlowCircuitSVG({ netlist, solveResult, revealed, highlig
         const highlight = c.id === highlightId
         const onTap = onComponentTap ? () => onComponentTap(c.id) : undefined
 
+        const compResult = resultsActive ? resultMap.get(c.id) : undefined
+        const isBlown = compResult?.state === 'blown'
+        let reading: string | undefined
+        if (compResult) {
+          if (c.type === 'ammeter') {
+            reading = formatReading(compResult.current, 'A')
+          } else if (c.type === 'voltmeter') {
+            reading = formatReading(compResult.voltage, 'V')
+          } else if (c.type === 'fuse') {
+            reading = isBlown ? 'BLOWN' : formatReading(compResult.current, 'A')
+          }
+        }
+
         switch (c.type) {
           case 'battery':
             return <Battery key={c.id} r1={r1} c1={c1} r2={r2} c2={c2} highlight={highlight} onTap={onTap} />
@@ -417,6 +639,12 @@ export default function GlowCircuitSVG({ netlist, solveResult, revealed, highlig
             return <Switch key={c.id} r1={r1} c1={c1} r2={r2} c2={c2} closed={c.closed} highlight={highlight} onTap={onTap} />
           case 'wire':
             return <Wire key={c.id} r1={r1} c1={c1} r2={r2} c2={c2} highlight={highlight} onTap={onTap} />
+          case 'ammeter':
+            return <Ammeter key={c.id} r1={r1} c1={c1} r2={r2} c2={c2} reading={reading} highlight={highlight} onTap={onTap} />
+          case 'voltmeter':
+            return <Voltmeter key={c.id} r1={r1} c1={c1} r2={r2} c2={c2} reading={reading} highlight={highlight} onTap={onTap} />
+          case 'fuse':
+            return <Fuse key={c.id} r1={r1} c1={c1} r2={r2} c2={c2} isBlown={isBlown} reading={reading} highlight={highlight} onTap={onTap} />
           default:
             return null
         }

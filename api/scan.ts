@@ -37,7 +37,16 @@ export const NETLIST_SCHEMA = {
           id: { type: Type.STRING },
           type: {
             type: Type.STRING,
-            enum: ['battery', 'bulb', 'resistor', 'switch', 'wire'],
+            enum: [
+              'battery',
+              'bulb',
+              'resistor',
+              'switch',
+              'wire',
+              'ammeter',
+              'voltmeter',
+              'fuse',
+            ],
           },
           from: {
             type: Type.OBJECT,
@@ -72,8 +81,10 @@ export const MAX_PAYLOAD_BYTES = 4 * 1024 * 1024 // 4 MB
 
 export const BATTERY_PRESETS = [1.5, 3, 4.5, 6, 9] as const
 export const RESISTOR_PRESETS = [5, 10, 20, 50, 100] as const
+export const FUSE_PRESETS = [0.25, 0.5, 1, 2] as const
 export const DEFAULT_BATTERY_VOLTAGE = 3
 export const DEFAULT_RESISTOR_OHMS = 10
+export const DEFAULT_FUSE_RATING = 0.5
 
 /** Snaps a numeric value to the nearest preset in a list of numbers */
 export function snapToPreset(val: number, presets: readonly number[]): number {
@@ -121,6 +132,9 @@ const KNOWN_COMPONENT_TYPES = new Set<ComponentType>([
   'resistor',
   'switch',
   'wire',
+  'ammeter',
+  'voltmeter',
+  'fuse',
 ])
 
 function isValidGridPoint(pt: unknown): pt is GridPoint {
@@ -193,6 +207,11 @@ export function validateNetlist(
         typeof raw.value === 'number' && !isNaN(raw.value) && raw.value > 0
           ? snapToPreset(raw.value, RESISTOR_PRESETS)
           : DEFAULT_RESISTOR_OHMS
+    } else if (comp.type === 'fuse') {
+      comp.value =
+        typeof raw.value === 'number' && !isNaN(raw.value) && raw.value > 0
+          ? snapToPreset(raw.value, FUSE_PRESETS)
+          : DEFAULT_FUSE_RATING
     } else if (comp.type === 'switch') {
       comp.closed = typeof raw.closed === 'boolean' ? raw.closed : true
     }
@@ -377,6 +396,19 @@ Read the hand-drawn DC circuit in this image using standard circuit schematic sy
    - Drawn as plain straight lines connecting components or turning 90-degree corners.
    - Only output wires for lines actually drawn. A simple rectangle loop has NO wires inside it. Do not invent connections. Most student drawings are ONE series loop.
    - Example component: { "id": "wire1", "type": "wire", "from": {"row": 0, "col": 3}, "to": {"row": 1, "col": 3} }
+
+6. Ammeter (current meter):
+   - Textbook symbol: A circle with a capital letter 'A' inside, placed along a wire in series. Measures electric current.
+   - Example component: { "id": "amm1", "type": "ammeter", "from": {"row": 0, "col": 1}, "to": {"row": 0, "col": 2} }
+
+7. Voltmeter (voltage meter):
+   - Textbook symbol: A circle with a capital letter 'V' inside, connected across branches in parallel. Measures electric potential difference.
+   - Example component: { "id": "vm1", "type": "voltmeter", "from": {"row": 1, "col": 1}, "to": {"row": 1, "col": 2} }
+
+8. Fuse (protective safety device):
+   - Textbook symbol: A rectangle with the conductive wire line running straight through it (or an S-wire inside a rectangle).
+   - Read written current rating labels (e.g., '0.25A', '0.5A', '1A', '2A') into the 'value' field. Snap to nearest preset: 0.25, 0.5, 1, 2 A. Default is 0.5 A if unlabelled.
+   - Example component: { "id": "fuse1", "type": "fuse", "from": {"row": 0, "col": 2}, "to": {"row": 0, "col": 3}, "value": 0.5 }
 
 ### CRITICAL JUNCTION & TOPOLOGY RULES:
 - 5×5 Grid: Map all components onto a 5×5 grid (rows 0–4, cols 0–4). Preserving which parts connect to which.

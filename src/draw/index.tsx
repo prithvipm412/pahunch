@@ -46,9 +46,21 @@ const LABEL_NAMES: Record<string, string> = {
   resistor: 'Resistor',
   switch: 'Switch',
   wire: 'Wire',
+  ammeter: 'Ammeter',
+  voltmeter: 'Voltmeter',
+  fuse: 'Fuse',
 }
 
-const COMPONENT_CYCLE: ComponentType[] = ['battery', 'bulb', 'resistor', 'switch', 'wire']
+const COMPONENT_CYCLE: ComponentType[] = [
+  'battery',
+  'bulb',
+  'resistor',
+  'switch',
+  'wire',
+  'ammeter',
+  'voltmeter',
+  'fuse',
+]
 
 function getNextType(current: ComponentType): ComponentType {
   const idx = COMPONENT_CYCLE.indexOf(current)
@@ -450,6 +462,9 @@ function ResultView({
     resistor: '〰️',
     switch: '🔌',
     wire: '🔗',
+    ammeter: '🅰️',
+    voltmeter: 'Ⓥ',
+    fuse: '⚡',
   }
 
   // Cycle component type
@@ -461,6 +476,7 @@ function ResultView({
         const comp: CircuitComponent = { ...c, type: nextType }
         if (nextType === 'battery') comp.value = 9
         else if (nextType === 'resistor') comp.value = 10
+        else if (nextType === 'fuse') comp.value = 0.5
         else if (nextType === 'switch') comp.closed = true
         else {
           delete comp.value
@@ -642,7 +658,7 @@ function ResultView({
                     {c.value !== undefined && (
                       <span className="part-value">
                         {' '}({c.value}
-                        {c.type === 'resistor' ? 'Ω' : c.type === 'battery' ? 'V' : ''})
+                        {c.type === 'resistor' ? 'Ω' : c.type === 'battery' ? 'V' : c.type === 'fuse' ? 'A' : ''})
                       </span>
                     )}
                   </span>

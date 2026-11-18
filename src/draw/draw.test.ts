@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
+import { createElement } from 'react'
 import {
   enqueue,
   queueSize,
@@ -24,11 +25,16 @@ import {
   snapToPreset,
   BATTERY_PRESETS,
   RESISTOR_PRESETS,
+  FUSE_PRESETS,
   DEFAULT_BATTERY_VOLTAGE,
   DEFAULT_RESISTOR_OHMS,
+  DEFAULT_FUSE_RATING,
   DEMO_NETLIST,
   default as scanHandler,
 } from '../../api/scan.ts'
+import { renderToString } from 'react-dom/server'
+import CircuitSVG from './CircuitSVG'
+import GlowCircuitSVG from '../learn/GlowCircuitSVG'
 import {
   findInteriorWires,
   findSuspectWires,
@@ -870,5 +876,170 @@ describe('i18n suspect wire messages', () => {
     expect(drawI18n.kn.suspect_wire_msg).toBe(
       'ಪಾಹುಂಚ್ ಈ ತಂತಿಯನ್ನು ಸೇರಿಸಿರಬಹುದು — ತೆಗೆಯಲು ಅದನ್ನು ತಟ್ಟಿ',
     )
+  })
+})
+
+describe('Ammeter, Voltmeter, and Fuse support in api/scan.ts and SVG rendering', () => {
+  it('snaps fuse ratings to nearest preset (0.25, 0.5, 1, 2 A) and sets default 0.5 A', () => {
+    expect(snapToPreset(0.2, FUSE_PRESETS)).toBe(0.25)
+    expect(snapToPreset(0.4, FUSE_PRESETS)).toBe(0.5)
+    expect(snapToPreset(0.8, FUSE_PRESETS)).toBe(1)
+    expect(snapToPreset(1.8, FUSE_PRESETS)).toBe(2)
+    expect(snapToPreset(5, FUSE_PRESETS)).toBe(2)
+  })
+
+  it('validateNetlist accepts ammeter, voltmeter, and fuse', () => {
+    const raw = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'amm1', type: 'ammeter', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
+        { id: 'fuse1', type: 'fuse', from: { row: 0, col: 2 }, to: { row: 0, col: 3 }, value: 1 },
+        { id: 'fuse2', type: 'fuse', from: { row: 0, col: 3 }, to: { row: 0, col: 4 } }, // unlabelled -> default
+        { id: 'vm1', type: 'voltmeter', from: { row: 1, col: 1 }, to: { row: 1, col: 2 } },
+      ],
+    }
+
+    const validated = validateNetlist(raw)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+
+    const comps = validated.netlist.components
+    expect(comps.find((c) => c.id === 'amm1')?.type).toBe('ammeter')
+    expect(comps.find((c) => c.id === 'vm1')?.type).toBe('voltmeter')
+    expect(comps.find((c) => c.id === 'fuse1')?.value).toBe(1)
+    expect(comps.find((c) => c.id === 'fuse2')?.value).toBe(DEFAULT_FUSE_RATING)
+  })
+
+  it('validateNetlist splits long straight ammeter/voltmeter/fuse across multiple dots', () => {
+    const raw = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'long_fuse', type: 'fuse', from: { row: 0, col: 0 }, to: { row: 0, col: 2 }, value: 2 },
+      ],
+    }
+
+    const validated = validateNetlist(raw)
+    expect(validated.ok).toBe(true)
+    if (!validated.ok) return
+
+    const comps = validated.netlist.components
+    expect(comps.length).toBe(2)
+    expect(comps[0].id).toBe('long_fuse')
+    expect(comps[0].type).toBe('fuse')
+    expect(comps[0].value).toBe(2)
+    expect(comps[0].from).toEqual({ row: 0, col: 0 })
+    expect(comps[0].to).toEqual({ row: 0, col: 1 })
+
+    expect(comps[1].type).toBe('wire')
+    expect(comps[1].from).toEqual({ row: 0, col: 1 })
+    expect(comps[1].to).toEqual({ row: 0, col: 2 })
+  })
+
+  it('CircuitSVG renders ammeter with "A" text and current reading', () => {
+    const netlist: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'amm1', type: 'ammeter', from: { row: 0, col: 1 }, to: { row: 1, col: 1 } },
+        { id: 'bulb1', type: 'bulb', from: { row: 1, col: 1 }, to: { row: 1, col: 0 } },
+        { id: 'wire1', type: 'wire', from: { row: 1, col: 0 }, to: { row: 0, col: 0 } },
+      ],
+    }
+
+    const solveResult = solve(netlist)
+    const svgHtml = renderToString(createElement(CircuitSVG, { netlist, solveResult }))
+
+    expect(svgHtml).toContain('>A<')
+    // Loop has non-zero current, should display reading label in Amperes
+    expect(svgHtml).toMatch(/\d+(\.\d+)?\s*A/)
+  })
+
+  it('CircuitSVG renders voltmeter with "V" text and voltage reading', () => {
+    const netlist: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 1 }, to: { row: 1, col: 1 } },
+        { id: 'vm1', type: 'voltmeter', from: { row: 0, col: 1 }, to: { row: 1, col: 1 } },
+        { id: 'wire1', type: 'wire', from: { row: 1, col: 1 }, to: { row: 1, col: 0 } },
+        { id: 'wire2', type: 'wire', from: { row: 1, col: 0 }, to: { row: 0, col: 0 } },
+      ],
+    }
+
+    const solveResult = solve(netlist)
+    const svgHtml = renderToString(createElement(CircuitSVG, { netlist, solveResult }))
+
+    expect(svgHtml).toContain('>V<')
+    expect(svgHtml).toMatch(/\d+(\.\d+)?\s*V/)
+  })
+
+  it('CircuitSVG renders intact fuse with continuous line and blown fuse with red broken line & BLOWN label', () => {
+    // 1. Intact fuse
+    const intactNetlist: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'fuse1', type: 'fuse', from: { row: 0, col: 1 }, to: { row: 0, col: 2 }, value: 1.0 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 2 }, to: { row: 1, col: 2 } },
+        { id: 'wire1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 1, col: 0 } },
+        { id: 'wire2', type: 'wire', from: { row: 1, col: 0 }, to: { row: 0, col: 0 } },
+      ],
+    }
+
+    const intactSolve = solve(intactNetlist)
+    const intactHtml = renderToString(createElement(CircuitSVG, { netlist: intactNetlist, solveResult: intactSolve }))
+    expect(intactHtml).not.toContain('BLOWN')
+    expect(intactHtml).toMatch(/\d+(\.\d+)?\s*A/)
+
+    // 2. Blown fuse (0.25A rating with high current parallel bulbs)
+    const blownNetlist: Netlist = {
+      gridSize: 5,
+      source: 'draw',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'fuse1', type: 'fuse', from: { row: 0, col: 1 }, to: { row: 0, col: 2 }, value: 0.25 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 2 }, to: { row: 1, col: 2 } },
+        { id: 'bulb2', type: 'bulb', from: { row: 0, col: 2 }, to: { row: 1, col: 2 } },
+        { id: 'wire1', type: 'wire', from: { row: 1, col: 2 }, to: { row: 1, col: 0 } },
+        { id: 'wire2', type: 'wire', from: { row: 1, col: 0 }, to: { row: 0, col: 0 } },
+      ],
+    }
+
+    const blownSolve = solve(blownNetlist)
+    const blownHtml = renderToString(createElement(CircuitSVG, { netlist: blownNetlist, solveResult: blownSolve }))
+    expect(blownHtml).toContain('BLOWN')
+    expect(blownHtml).toContain('#ef5350')
+  })
+
+  it('GlowCircuitSVG renders ammeter, voltmeter, and fuse with reading labels', () => {
+    const netlist: Netlist = {
+      gridSize: 5,
+      source: 'build',
+      components: [
+        { id: 'bat1', type: 'battery', from: { row: 0, col: 0 }, to: { row: 0, col: 1 }, value: 3 },
+        { id: 'amm1', type: 'ammeter', from: { row: 0, col: 1 }, to: { row: 0, col: 2 } },
+        { id: 'fuse1', type: 'fuse', from: { row: 0, col: 2 }, to: { row: 0, col: 3 }, value: 1.0 },
+        { id: 'bulb1', type: 'bulb', from: { row: 0, col: 3 }, to: { row: 1, col: 3 } },
+        { id: 'vm1', type: 'voltmeter', from: { row: 0, col: 3 }, to: { row: 1, col: 3 } },
+        { id: 'wire1', type: 'wire', from: { row: 1, col: 3 }, to: { row: 1, col: 0 } },
+        { id: 'wire2', type: 'wire', from: { row: 1, col: 0 }, to: { row: 0, col: 0 } },
+      ],
+    }
+
+    const solveResult = solve(netlist)
+    const svgHtml = renderToString(
+      createElement(GlowCircuitSVG, { netlist, solveResult, revealed: true }),
+    )
+
+    expect(svgHtml).toContain('>A<')
+    expect(svgHtml).toContain('>V<')
+    expect(svgHtml).toMatch(/\d+(\.\d+)?\s*A/)
+    expect(svgHtml).toMatch(/\d+(\.\d+)?\s*V/)
   })
 })
