@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Netlist } from '../contracts/netlist'
 import { removeSelectedBuildPart, selectBuildPart, undoBuildAction } from './editorState'
+import { createBuildComponent } from './componentFactory'
 
 const netlist: Netlist = {
   gridSize: 5,
@@ -23,5 +24,20 @@ describe('Build selection removal and undo', () => {
     expect(undone.netlist).toEqual(netlist)
     expect(undone.undoStack).toEqual([])
     expect(undone.selectedId).toBeNull()
+  })
+
+  it.each(['ammeter', 'voltmeter', 'fuse'] as const)('places, selects, removes, and restores a %s', (type) => {
+    const part = createBuildComponent(type, `${type}-1`, { row: 1, col: 1 }, { row: 1, col: 2 })
+    if (type === 'fuse') expect(part.value).toBe(0.5)
+    else expect(part.value).toBeUndefined()
+
+    const initial = { netlist: { ...netlist, components: [part] }, undoStack: [], selectedId: null }
+    const selected = selectBuildPart(initial, part.id)
+    const removed = removeSelectedBuildPart(selected)
+    expect(removed.netlist.components).toEqual([])
+    expect(removed.selectedId).toBeNull()
+
+    const undone = undoBuildAction(removed)
+    expect(undone.netlist.components).toEqual([part])
   })
 })
